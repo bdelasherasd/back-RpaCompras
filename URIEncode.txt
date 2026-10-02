@@ -1,0 +1,6 @@
+sboxes@osboxes:~$ node
+Welcome to Node.js v23.5.0.
+Type ".help" for more information.
+> encodeURIComponent("$2b$10$SjCal/SAJaT5BJwM/y1t9ecFSN54guHXTRtsn/TCTgzcVNgB0e/yK")
+'%242b%2410%24SjCal%2FSAJaT5BJwM%2Fy1t9ecFSN54guHXTRtsn%2FTCTgzcVNgB0e%2FyK'
+> 
