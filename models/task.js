@@ -15,6 +15,12 @@ var task = sequelize.define("task", {
   res: "NVARCHAR(MAX)",
 });
 //sequelize.sync({ alter: true });
-sequelize.sync();
+
+try {
+  sequelize.sync();
+} catch (error) {
+  console.error('Unable to connect to the database:', error);
+}
+
 
 module.exports = task;
