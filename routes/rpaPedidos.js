@@ -4,10 +4,14 @@ var cors = require("cors");
 var sequelize = require("../models/sequelizeConnection");
 var sequelizeFin700 = require("../models/sequelizeFin700");
 const showLog = require("../middleware/showLog");
+const rpaPedidos = require("../models/rpaPedidos");
 const { chromium } = require('playwright');
 require("dotenv").config({ path: "variables.env" });
 
 const cron = require('node-cron');
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
 
 
 const urlfin700 = process.env.urlfin700;
@@ -218,29 +222,102 @@ async function procesaPedido(empId, nroPedido) {
 
     await page.waitForTimeout(1000);
 
-    const locator = page.locator('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a > span');
 
-    // locator.count() es inmediato
-    if (await locator.count() > 0 && await locator.isVisible()) {
-        await locator.click();
+
+
+
+    const locatorDocEnUso = page.locator('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a > span');
+    if (await locatorDocEnUso.count() > 0 && await locatorDocEnUso.isVisible()) {
+        await locatorDocEnUso.click();
         console.log('Se hizo clic en el elemento.');
     } else {
         console.log('Pedido Libre');
     }
 
 
+
     await frame.getByRole('link', { name: 'Ver Documentos Fisicos' }).click();
-    const frameBorder = await page.locator('#sntPopupWindow1793216257977 > iframe').contentFrame();
+    await page.waitForTimeout(2000);
 
-    // Busca cualquier elemento cuyo ID *termine* en TabDocumentosAsociados
-    const enlace = frameBorder.locator('[id$="TabDocumentosAsociados"] tr.DataGridItem td:nth-child(2) a');
-
-    if (await enlace.count() > 0) {
-        await enlace.click();
+    const frameBorder = await page.locator('xpath=/html/body/div[6]/div[2]/iframe').contentFrame();
+    console.log(`frameBorder ${await frameBorder.locator('body').count()}`);
+    const enlaceImagen = await frameBorder.locator('xpath=//*[@id="ctl11_TabDocumentosAsociados"]/tbody/tr[2]/td[2]/a/p/img');
+    if (await enlaceImagen.count() > 0) {
+        await enlaceImagen.click();
         console.log('Se hizo clic con éxito.');
     } else {
         console.log('Elemento no encontrado');
     }
+    await page.waitForTimeout(2000);
+
+
+    const downloadFolder = path.join(__dirname, '../downloads');
+    if (!fs.existsSync(downloadFolder)) {
+        fs.mkdirSync(downloadFolder, { recursive: true });
+    }
+
+    const iframeBorder2 = page.frameLocator('iframe.k-content-frame[src*="ucExiDocumentoFisicoMostrar"]');
+    try {
+        console.log("Extrayendo la URL del documento desde el atributo onclick...");
+
+        // 1. Obtenemos el valor del atributo onclick de la imagen o del enlace contenedor
+        const linkElement = iframeBorder2.locator('img[src*="d1.gif"]').locator('xpath=ancestor::a');
+        const onclickAttr = await linkElement.getAttribute('onclick');
+
+        //console.log("Atributo onclick capturado:", onclickAttr);
+        console.log("Atributo onclick capturado:");
+
+        // 2. Extraemos la URL que está dentro de sntWindowOpen('...') usando una expresión regular
+        const match = onclickAttr.match(/sntWindowOpen\(['"]([^'"]+)['"]/);
+
+        if (!match || !match[1]) {
+            throw new Error("No se pudo extraer la URL del visor en el atributo onclick.");
+        }
+
+        const relativeUrl = match[1];
+
+        // 3. Construimos la URL absoluta basada en la URL actual de la página
+        const baseCurrentUrl = page.url();
+        const baseUrl = baseCurrentUrl.substring(0, baseCurrentUrl.lastIndexOf('/') + 1);
+        const pdfUrl = baseUrl + relativeUrl;
+
+        //console.log("URL absoluta del documento:", pdfUrl);
+        console.log("URL absoluta del documento:");
+
+        // 4. Descargamos el archivo usando las cookies de sesión actuales de Playwright
+        const cookies = await page.context().cookies();
+        const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+        const response = await axios.get(pdfUrl, {
+            headers: { Cookie: cookieHeader },
+            responseType: 'arraybuffer'
+        });
+
+        // 5. Definimos un nombre y guardamos el archivo físicamente
+        const fileName = `documento_${Date.now()}.pdf`;
+        const savePath = path.join(downloadFolder, fileName);
+
+        fs.writeFileSync(savePath, response.data);
+        console.log(`¡Archivo guardado exitosamente en: ${savePath}`);
+
+        await rpaPedidos.create({
+            empId: empId,
+            nroPedido: nroPedido,
+            archivo: fileName,
+            iaRut: '',
+            iaTotal: 0
+        });
+        console.log("Registro almacenado en Sequelize correctamente.");
+    } catch (e) {
+        console.log("El modal probablemente se cerró tras el clic:", e.message);
+    }
+
+    await page.waitForTimeout(1000);
+    await page.click('body > div:nth-child(9) > div.k-window-titlebar.k-hstack > div > a');
+
+    await page.waitForTimeout(1000);
+    await page.click('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a');
+
     console.log('Proceso de pedido finalizado.');
 
 }
