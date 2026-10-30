@@ -141,7 +141,7 @@ async function getPedidos(nroPedido) {
 
 
 const procesaData = async (nroPedido) => {
-    nroPedido = 1644900;
+    //nroPedido = 1644900;
     let NroDePedidos = await getPedidos(nroPedido);
     browser = await chromium.launch({ headless: false });
     page = await browser.newPage();
@@ -242,6 +242,10 @@ async function procesaPedido(empId, nroPedido) {
     }
     console.log(`Continuando con el procesamiento del pedido ${nroPedido}`);
 
+    const totalPedido = await frame.locator('//*[@id="ctl11_TotalPedidoCompra"]').inputValue();
+    const totalPedidoFloat = parseFloat(totalPedido);
+    const monedaPedido = await frame.locator('//*[@id="ctl11_Label20"]').textContent();
+
 
     console.log(`Accediendo a la sección de Documentos Fisicos`);
     await frame.getByRole('link', { name: 'Ver Documentos Fisicos' }).click();
@@ -249,18 +253,44 @@ async function procesaPedido(empId, nroPedido) {
 
     const frameBorder = await page.locator('xpath=/html/body/div[6]/div[2]/iframe').contentFrame();
     const cantidadTr = await frameBorder.locator('#ctl11_TabDocumentosAsociados > tbody > tr').count();
-    for (let i = 2; i <= cantidadTr - 1; i++) {
-        await procesaLineaDocumentos(empId, nroPedido, i);
+
+
+    if (cantidadTr > 2) {
+        for (let i = 2; i <= cantidadTr - 1; i++) {
+            await procesaLineaDocumentos(empId, nroPedido, i, totalPedidoFloat, monedaPedido);
+        }
+        console.log(`Se procesaron ${cantidadTr - 2} líneas de documentos físicos.`);
+        await page.waitForTimeout(1000);
+    } else {
+        console.log(`No hay líneas de documentos físicos para procesar.`);
+        await rpaPedidos.create({
+            empId: empId,
+            nroPedido: nroPedido,
+            archivo: '',
+            iaRut: '',
+            iaTotal: 0,
+            iaMoneda: '',
+            porValidar: true,
+            okRut: false,
+            okTotal: false,
+            okMoneda: false,
+            okParaOC: false,
+            NroOc: 0,
+            totalPedido: totalPedidoFloat,
+            monedaPedido: monedaPedido
+        });
     }
-    console.log(`Se procesaron ${cantidadTr - 2} líneas de documentos físicos.`);
-    await page.waitForTimeout(1000);
+
     await page.click('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a');
 
     console.log(`Proceso de pedido ${nroPedido} finalizado.`);
 
+    await page.waitForTimeout(1000);
+    await frame.locator('xpath=//*[@id="ctl11_btnVolver"]').click();
+
 }
 
-const procesaLineaDocumentos = async (empId, nroPedido, linea) => {
+const procesaLineaDocumentos = async (empId, nroPedido, linea, totalPedidoFloat, monedaPedido) => {
     const frameBorder = await page.locator('xpath=/html/body/div[6]/div[2]/iframe').contentFrame();
     console.log(`frameBorder ${await frameBorder.locator('body').count()}`);
     const enlaceImagen = await frameBorder.locator(`xpath=//*[@id="ctl11_TabDocumentosAsociados"]/tbody/tr[${linea}]/td[2]/a/p/img`);
@@ -334,7 +364,16 @@ const procesaLineaDocumentos = async (empId, nroPedido, linea) => {
             nroPedido: nroPedido,
             archivo: fileName,
             iaRut: '',
-            iaTotal: 0
+            iaTotal: 0,
+            iaMoneda: '',
+            porValidar: true,
+            okRut: false,
+            okTotal: false,
+            okMoneda: false,
+            okParaOC: false,
+            NroOc: 0,
+            totalPedido: totalPedidoFloat,
+            monedaPedido: monedaPedido
         });
         console.log("Registro almacenado en Sequelize correctamente.");
     } catch (e) {

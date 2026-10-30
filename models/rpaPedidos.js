@@ -11,13 +11,21 @@ var rpaPedidos = sequelize.define("rpaPedidos", {
   nroPedido: type.INTEGER,
   archivo: type.STRING,
   iaRut: type.STRING,
-  iaTotal: type.FLOAT
-
+  iaTotal: type.FLOAT,
+  iaMoneda: type.STRING,
+  porValidar: type.BOOLEAN,
+  okRut: type.BOOLEAN,
+  okTotal: type.BOOLEAN,
+  okMoneda: type.BOOLEAN,
+  okParaOC: type.BOOLEAN,
+  NroOc: type.INTEGER,
+  totalPedido: type.FLOAT,
+  monedaPedido: type.STRING
 });
 //sequelize.sync({ alter: true });
 
 try {
-  sequelize.sync();
+  sequelize.sync({ alter: true });
 } catch (error) {
   console.error('Unable to connect to the database:', error);
 }
