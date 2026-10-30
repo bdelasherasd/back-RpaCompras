@@ -141,7 +141,7 @@ async function getPedidos(nroPedido) {
 
 
 const procesaData = async (nroPedido) => {
-
+    nroPedido = 1644900;
     let NroDePedidos = await getPedidos(nroPedido);
     browser = await chromium.launch({ headless: false });
     page = await browser.newPage();
@@ -197,13 +197,16 @@ async function procesaPedido(empId, nroPedido) {
 
 
     // selecciona Folio
+    console.log(`Selecciona tipo de selección de pedido`);
     await frame.locator('#ctl11_Filtrofolio').selectOption('0');
     await page.waitForTimeout(1000);
 
+    console.log(`Llenando el campo Folio con: ${nroPedido}`);
     await frame.locator('#ctl11_PedidoMaterialIdDesde').fill(nroPedido.toString());
     await frame.locator('#ctl11_PedidoMaterialIdDesde').press('Tab');
 
     // selecciona Empresa
+    console.log(`Selecciona Empresa con ID: ${empId}`);
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').click();
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('ControlOrMeta+a');
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').fill(empId.toString());
@@ -213,18 +216,22 @@ async function procesaPedido(empId, nroPedido) {
 
     // pausa de 1 segundo
     await page.waitForTimeout(1000);
+    console.log(`Haciendo clic en el botón Buscar`);
     await frame.getByRole('button', { name: 'Buscar' }).click();
 
 
     // espera a que los resultados se carguen
 
+    console.log(`Haciendo clic en el enlace del pedido ${nroPedido}`);
     await frame.getByRole('link', { name: nroPedido.toString() }).click();
 
+    await page.waitForTimeout(1000);
+    console.log(`Esperando a que se cargue el pedido ${nroPedido}`);
     await page.waitForTimeout(1000);
 
 
 
-
+    console.log(`Verificando si el documento está en uso`);
 
     const locatorDocEnUso = page.locator('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a > span');
     if (await locatorDocEnUso.count() > 0 && await locatorDocEnUso.isVisible()) {
@@ -233,16 +240,33 @@ async function procesaPedido(empId, nroPedido) {
     } else {
         console.log('Pedido Libre');
     }
+    console.log(`Continuando con el procesamiento del pedido ${nroPedido}`);
 
 
-
+    console.log(`Accediendo a la sección de Documentos Fisicos`);
     await frame.getByRole('link', { name: 'Ver Documentos Fisicos' }).click();
     await page.waitForTimeout(2000);
 
     const frameBorder = await page.locator('xpath=/html/body/div[6]/div[2]/iframe').contentFrame();
+    const cantidadTr = await frameBorder.locator('#ctl11_TabDocumentosAsociados > tbody > tr').count();
+    for (let i = 2; i <= cantidadTr - 1; i++) {
+        await procesaLineaDocumentos(empId, nroPedido, i);
+    }
+    console.log(`Se procesaron ${cantidadTr - 2} líneas de documentos físicos.`);
+    await page.waitForTimeout(1000);
+    await page.click('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a');
+
+    console.log('Proceso de pedido finalizado.');
+
+}
+
+const procesaLineaDocumentos = async (empId, nroPedido, linea) => {
+    const frameBorder = await page.locator('xpath=/html/body/div[6]/div[2]/iframe').contentFrame();
     console.log(`frameBorder ${await frameBorder.locator('body').count()}`);
-    const enlaceImagen = await frameBorder.locator('xpath=//*[@id="ctl11_TabDocumentosAsociados"]/tbody/tr[2]/td[2]/a/p/img');
+    const enlaceImagen = await frameBorder.locator(`xpath=//*[@id="ctl11_TabDocumentosAsociados"]/tbody/tr[${linea}]/td[2]/a/p/img`);
+    console.log(`Buscando enlace de imagen en Documentos Fisicos`);
     if (await enlaceImagen.count() > 0) {
+        console.log(`Enlace de imagen encontrado, haciendo clic...`);
         await enlaceImagen.click();
         console.log('Se hizo clic con éxito.');
     } else {
@@ -261,7 +285,8 @@ async function procesaPedido(empId, nroPedido) {
         console.log("Extrayendo la URL del documento desde el atributo onclick...");
 
         // 1. Obtenemos el valor del atributo onclick de la imagen o del enlace contenedor
-        const linkElement = iframeBorder2.locator('img[src*="d1.gif"]').locator('xpath=ancestor::a');
+        //const linkElement = iframeBorder2.locator('img[src*="d1.gif"]').locator('xpath=ancestor::a');
+        const linkElement = iframeBorder2.locator(`xpath=//*[@id="ctl11_TabDocumentosAsociados"]/tbody/tr[${linea}]/td[2]/a/p/img`).locator('xpath=ancestor::a');
         const onclickAttr = await linkElement.getAttribute('onclick');
 
         //console.log("Atributo onclick capturado:", onclickAttr);
@@ -314,11 +339,6 @@ async function procesaPedido(empId, nroPedido) {
 
     await page.waitForTimeout(1000);
     await page.click('body > div:nth-child(9) > div.k-window-titlebar.k-hstack > div > a');
-
-    await page.waitForTimeout(1000);
-    await page.click('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a');
-
-    console.log('Proceso de pedido finalizado.');
 
 }
 
