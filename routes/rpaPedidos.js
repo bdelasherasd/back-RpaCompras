@@ -256,7 +256,7 @@ async function procesaPedido(empId, nroPedido) {
     await page.waitForTimeout(1000);
     await page.click('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a');
 
-    console.log('Proceso de pedido finalizado.');
+    console.log(`Proceso de pedido ${nroPedido} finalizado.`);
 
 }
 
@@ -318,8 +318,12 @@ const procesaLineaDocumentos = async (empId, nroPedido, linea) => {
             responseType: 'arraybuffer'
         });
 
+        const appFileName = await iframeBorder2.locator(`xpath=//*[@id="ctl11_TabDocumentosAsociados"]/tbody/tr[${linea}]/td[1]`).innerText();
+        const extensionFileName = appFileName.split('.').pop().trim();
+        const baseFileName = appFileName.replace(`.${extensionFileName}`, '').trim();
+
         // 5. Definimos un nombre y guardamos el archivo físicamente
-        const fileName = `documento_${Date.now()}.pdf`;
+        const fileName = `${baseFileName}_${Date.now()}.${extensionFileName}`;
         const savePath = path.join(downloadFolder, fileName);
 
         fs.writeFileSync(savePath, response.data);
