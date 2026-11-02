@@ -12,6 +12,12 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { GoogleGenAI, Type } = require('@google/genai');
+const readXlsxFile = require('read-excel-file/node');
+
+
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 
 const urlfin700 = process.env.urlfin700;
@@ -382,6 +388,204 @@ const procesaLineaDocumentos = async (empId, nroPedido, linea, totalPedidoFloat,
 
     await page.waitForTimeout(1000);
     await page.click('body > div:nth-child(9) > div.k-window-titlebar.k-hstack > div > a');
+
+}
+
+// Validador de pedidos
+const INTERVALO_SEGUNDOS = 15;
+setInterval(async () => {
+    await ValidarPedidos();
+}, INTERVALO_SEGUNDOS * 1000);
+
+let validandoPedidos = false;
+
+const ValidarPedidos = async () => {
+    try {
+        // Aquí iría la lógica para validar los pedidos pendientes
+        console.log("Validando pedidos pendientes...");
+        const sql = `SELECT top 1 * FROM rpaPedidos WHERE porValidar = 1`;
+        const pendientes = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
+        for (const pedido of pendientes) {
+            console.log(`Procesando pedido ID: ${pedido.id}`);
+            await encolaValidacion(pedido);
+        }
+        // Ejemplo: podrías consultar la base de datos y procesar los pedidos que necesiten validación
+    } catch (e) {
+        console.log("Error al validar pedidos:", e.message);
+    }
+
+}
+
+const encolaValidacion = async (pedido) => {
+    // Aquí iría la lógica para encolar la validación del pedido
+    console.log(`Encolando validación para pedido ID: ${pedido.id}`);
+    if (validandoPedidos) {
+        return;
+    }
+    validandoPedidos = true;
+    try {
+        // Aquí iría la lógica para procesar la validación del pedido
+        console.log(`Validando pedido ID: ${pedido.id}`);
+        // Simulación de procesamiento
+        const extension = pedido.archivo.split('.').pop();
+        if (extension === 'pdf') {
+            await iaParaPdf(pedido);
+        } else if (extension === 'jpg' || extension === 'jpeg' || extension === 'png') {
+            await iaParaImagen(pedido);
+        } else if (extension === 'xlsx' || extension === 'xls') {
+            await iaParaExcel(pedido);
+        } else {
+            await iaSinArchivoValido(pedido);
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`Pedido ID: ${pedido.id} validado correctamente.`);
+    } catch (e) {
+        console.log(`Error al validar pedido ID: ${pedido.id}:`, e.message);
+    } finally {
+        validandoPedidos = false;
+    }
+}
+
+const iaParaExcel = async (pedido) => {
+    // Lógica para procesar Excel
+    console.log(`Procesando Excel para pedido ID: ${pedido.id}`);
+    const carpetaExcel = 'downloads';
+    const archivoExcel = `${carpetaExcel}/${pedido.archivo}`;
+    const rutaCsvTemporal = await convertirExcelACsvTemporal(archivoExcel);
+    const fileBuffer = fs.readFileSync(rutaCsvTemporal);
+    const filePart = {
+        inlineData: {
+            data: fileBuffer.toString("base64"),
+            mimeType: 'text/csv' // 'application/pdf', 'image/jpeg', etc.
+        },
+    };
+    await AIGoogle(filePart, pedido);
+}
+
+async function convertirExcelACsvTemporal(rutaExcel) {
+    const contenido = await readXlsxFile(rutaExcel, { sheet: 1 });
+    const rows = Array.isArray(contenido[0])
+        ? contenido
+        : Array.isArray(contenido[0]?.data)
+            ? contenido[0].data
+            : [];
+
+    if (rows.length === 0) {
+        throw new Error('No se pudo leer contenido tabular del archivo Excel.');
+    }
+
+    const rutaCsvTemporal = rutaExcel.replace(/\.(xlsx|xls)$/i, '.tmp.csv');
+    const csv = rows
+        .map((row) => row.map((valor) => formatearValorCsv(valor)).join(','))
+        .join('\n');
+
+    fs.writeFileSync(rutaCsvTemporal, csv, 'utf8');
+    return rutaCsvTemporal;
+}
+
+function formatearValorCsv(valor) {
+    if (valor === null || valor === undefined) {
+        return '';
+    }
+
+    const texto = String(valor);
+
+    if (/[",\n\r]/.test(texto)) {
+        return `"${texto.replace(/"/g, '""')}"`;
+    }
+
+    return texto;
+}
+
+
+const iaParaImagen = async (pedido) => {
+    // Lógica para procesar imagen
+    const carpetaPdf = 'downloads';
+    const archivoExcel = `${carpetaPdf}/${pedido.archivo}`;
+    const fileBuffer = fs.readFileSync(archivoExcel);
+    const filePart = {
+        inlineData: {
+            data: fileBuffer.toString("base64"),
+            mimeType: 'image/jpeg' // 'application/pdf', 'image/jpeg', etc.
+        },
+    };
+    await AIGoogle(filePart, pedido);
+
+}
+
+const iaSinArchivoValido = async (pedido) => {
+    // Lógica para manejar archivos no válidos
+    const [rowsUpdated] = await rpaPedidos.update(
+        {
+            iaRut: '',
+            iaTotal: 0,
+            iaMoneda: '',
+            porValidar: false
+        },
+        {
+            where: {
+                id: pedido.id // Condición: actualiza solo el registro con id 15
+            }
+        }
+    );
+    console.log(`Archivo no válido para pedido ID: ${pedido.id}`);
+}
+
+const iaParaPdf = async (pedido) => {
+    // Lógica para procesar Excel
+    console.log(`Procesando Excel para pedido ID: ${pedido.id}`);
+    const carpetaPdf = 'downloads';
+    const archivoExcel = `${carpetaPdf}/${pedido.archivo}`;
+    const fileBuffer = fs.readFileSync(archivoExcel);
+    const filePart = {
+        inlineData: {
+            data: fileBuffer.toString("base64"),
+            mimeType: 'application/pdf' // 'application/pdf', 'image/jpeg', etc.
+        },
+    };
+    await AIGoogle(filePart, pedido);
+
+}
+
+const AIGoogle = async (filePart, pedido) => {
+    const prompt = "Analiza este documento y extrae el RUT de la empresa emisora, el monto total y el tipo de moneda. devuelve la información en formato JSON.";
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash', // Rápido, económico y excelente con imágenes/PDFs
+        contents: [filePart, prompt],
+        config: {
+            // Forzamos la respuesta a un JSON con la estructura exacta
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    rut: { type: Type.STRING, description: "RUT chileno o identificador fiscal" },
+                    total: { type: Type.NUMBER, description: "Monto total de la transacción" },
+                    moneda: { type: Type.STRING, description: "Código de moneda, ej: CLP, USD" },
+                },
+                required: ["rut", "total", "moneda"],
+            },
+        },
+    });
+    console.log(`Respuesta IA para pedido ID: ${pedido.id}:`, response.text);
+    let dataIa;
+    try {
+        dataIa = JSON.parse(response.text);
+        const [rowsUpdated] = await rpaPedidos.update(
+            {
+                iaRut: dataIa.rut.replace(/\./g, ''),
+                iaTotal: dataIa.total,
+                iaMoneda: dataIa.moneda,
+                porValidar: false
+            },
+            {
+                where: {
+                    id: pedido.id // Condición: actualiza solo el registro con id 15
+                }
+            }
+        );
+    } catch (e) {
+        console.log(`Error al parsear la respuesta IA para pedido ID: ${pedido.id}:`, e.message);
+    }
 
 }
 
