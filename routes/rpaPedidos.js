@@ -162,11 +162,14 @@ const procesaData = async (nroPedido) => {
         for (let pedido of NroDePedidos) {
             await procesaPedido(pedido.EmpId, pedido.NumPedido);
         }
+        console.log("Finished processing all pedidos.");
+        await browser.close();
 
     } catch (error) {
         console.log(error.message);
         //res.status(500).json({ error: "Internal Server Error" });
         console.log("Error during scheduled task: " + error.message);
+        await browser.close();
     }
 
 }
