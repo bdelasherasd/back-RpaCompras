@@ -402,11 +402,10 @@ let validandoPedidos = false;
 const ValidarPedidos = async () => {
     try {
         // Aquí iría la lógica para validar los pedidos pendientes
-        console.log("Validando pedidos pendientes...");
         const sql = `SELECT top 1 * FROM rpaPedidos WHERE porValidar = 1`;
         const pendientes = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
         for (const pedido of pendientes) {
-            console.log(`Procesando pedido ID: ${pedido.id}`);
+            console.log(`Validando pedido ID: ${pedido.id}`);
             await encolaValidacion(pedido);
         }
         // Ejemplo: podrías consultar la base de datos y procesar los pedidos que necesiten validación
@@ -425,6 +424,8 @@ const encolaValidacion = async (pedido) => {
     validandoPedidos = true;
     try {
         // Aquí iría la lógica para procesar la validación del pedido
+        await getDataFin700(pedido);
+
         console.log(`Validando pedido ID: ${pedido.id}`);
         // Simulación de procesamiento
         const extension = pedido.archivo.split('.').pop();
@@ -445,6 +446,61 @@ const encolaValidacion = async (pedido) => {
         validandoPedidos = false;
     }
 }
+
+const getDataFin700 = async (pedido) => {
+    // Lógica para obtener datos de Fin700
+    console.log(`Obteniendo datos de Fin700 para pedido ID: ${pedido.id}`);
+    const sql = `
+        SELECT 
+            PedCab.pEmpId EmpId, 
+            PedCab.PedidoMaterialId AS NumPedido, 
+            isNull(Ent.EntRut, '') AS EntRut, 
+            PedDet.pMonedaId, 
+            RTRIM(Mon.MonSimbolo) AS MonSimbolo, 
+            sum(PedDet.ValorUniOpeMoneda * PedDet.Cantidad) TotalPedido 
+        FROM Adqt_ProcesoCompraCab Cab 
+        INNER JOIN AdqT_ProcesoCompraDet ProDet ON Cab.ProCompraCabId = ProDet.pProCompraCabId 
+        INNER JOIN LogT_PedidoMaterialDet PedDet ON ProDet.pPedidoMaterialDetId = PedDet.PedidoMaterialDetId 
+        INNER JOIN LogT_PedidoMaterialCab PedCab ON PedDet.pPedidoMaterialId = PedCab.PedidoMaterialId 
+        INNER JOIN Usu_Usuarios Usu ON PedCab.UsuarioProceso = Usu.ID_USUARIO 
+        LEFT JOIN GlbT_Entidad Ent ON Ent.EntId = PedDet.pEntId
+        INNER JOIN GlbT_Monedas Mon ON Mon.MonedaId = PedDet.pMonedaId
+        WHERE Cab.ConEstCod = 1 
+        AND Cab.UsuarioProceso = 'RPAADQ'
+        AND PedCab.pEmpId = ${pedido.empId}
+        AND PedCab.PedidoMaterialId = ${pedido.nroPedido}
+        GROUP BY 
+            PedCab.pEmpId, 
+            PedCab.PedidoMaterialId, 
+            Ent.EntRut, 
+            PedDet.pMonedaId, 
+            Mon.MonSimbolo;
+`;
+    const result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
+    const data = result[0];
+    await rpaPedidos.update(
+        { rutPedido: limpiaRut(data.EntRut), totalPedido: data.TotalPedido, monedaPedido: data.MonSimbolo },
+        { where: { empid: pedido.empId, nroPedido: pedido.nroPedido } }
+    );
+    return;
+
+}
+
+const limpiaRut = (rut) => {
+    //return rut;
+    if (rut === null || rut === undefined) return rut;
+
+    rut = rut.replace(/\./g, '');
+
+    const rutTexto = String(rut).trim();
+    if (rutTexto === "") return rutTexto;
+
+    const [cuerpoOriginal, dv] = rutTexto.split("-");
+    const cuerpo = cuerpoOriginal.replace(/^0+/, "") || "0";
+
+    return dv !== undefined ? `${cuerpo}-${dv}` : cuerpo;
+};
+
 
 const iaParaExcel = async (pedido) => {
     // Lógica para procesar Excel
@@ -548,10 +604,30 @@ const iaParaPdf = async (pedido) => {
 }
 
 const AIGoogle = async (filePart, pedido) => {
-    const prompt = "Analiza este documento y extrae el RUT de la empresa emisora, el monto total y el tipo de moneda. devuelve la información en formato JSON.";
+    //const prompt = "Analiza este documento y extrae el RUT de la empresa emisora, el monto total y el tipo de moneda. Para pesos devuelve $, para dolar devuelve US$, para UF devueve UF. Devuelve la información en formato JSON.";
+    const EXTRACTION_PROMPT = `
+Analiza el documento adjunto y extrae los siguientes datos: el RUT de la empresa emisora, el monto total y el tipo de moneda.
+
+Aplica las siguientes reglas de normalización:
+- Para tipo de moneda CLP, $, PESOS (o variaciones similares): devuelve "$".
+- Para tipo de moneda US$, USD, dólar, dls: devuelve "US$".
+- Para tipo de moneda UF: devuelve "UF".
+
+Excepciones:
+- Si no viene el RUT en el documento, devuelve una cadena vacía ("") en ese campo.
+
+Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta (sin texto adicional ni bloques markdown fuera del JSON si vas a parsearlo automáticamente):
+{
+  "rut": "...",
+  "total": 0,
+  "moneda": "..."
+}
+`;
+
+
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash', // Rápido, económico y excelente con imágenes/PDFs
-        contents: [filePart, prompt],
+        contents: [filePart, EXTRACTION_PROMPT],
         config: {
             // Forzamos la respuesta a un JSON con la estructura exacta
             responseMimeType: "application/json",
@@ -560,7 +636,7 @@ const AIGoogle = async (filePart, pedido) => {
                 properties: {
                     rut: { type: Type.STRING, description: "RUT chileno o identificador fiscal" },
                     total: { type: Type.NUMBER, description: "Monto total de la transacción" },
-                    moneda: { type: Type.STRING, description: "Código de moneda, ej: CLP, USD" },
+                    moneda: { type: Type.STRING, description: "Código de moneda, ej: $, US$ o UF" },
                 },
                 required: ["rut", "total", "moneda"],
             },
@@ -572,10 +648,9 @@ const AIGoogle = async (filePart, pedido) => {
         dataIa = JSON.parse(response.text);
         const [rowsUpdated] = await rpaPedidos.update(
             {
-                iaRut: dataIa.rut.replace(/\./g, ''),
+                iaRut: limpiaRut(dataIa.rut),
                 iaTotal: dataIa.total,
                 iaMoneda: dataIa.moneda,
-                porValidar: false
             },
             {
                 where: {
@@ -585,6 +660,33 @@ const AIGoogle = async (filePart, pedido) => {
         );
     } catch (e) {
         console.log(`Error al parsear la respuesta IA para pedido ID: ${pedido.id}:`, e.message);
+    }
+
+    const dataPedido = await rpaPedidos.findOne({
+        where: {
+            id: pedido.id
+        }
+    });
+
+    if (dataPedido) {
+        const okRut = dataPedido.rutPedido == dataPedido.iaRut;
+        const okTotal = dataPedido.totalPedido == dataPedido.iaTotal;
+        const okMoneda = dataPedido.monedaPedido == dataPedido.iaMoneda;
+
+        await rpaPedidos.update(
+            {
+                okRut,
+                okTotal,
+                okMoneda,
+                okParaOC: okRut && okTotal && okMoneda,
+                porValidar: false
+            },
+            {
+                where: {
+                    id: dataPedido.id
+                }
+            }
+        );
     }
 
 }

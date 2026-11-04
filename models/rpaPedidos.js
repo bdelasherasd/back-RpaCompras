@@ -20,7 +20,8 @@ var rpaPedidos = sequelize.define("rpaPedidos", {
   okParaOC: type.BOOLEAN,
   NroOc: type.INTEGER,
   totalPedido: type.FLOAT,
-  monedaPedido: type.STRING
+  monedaPedido: type.STRING,
+  rutPedido: type.STRING
 });
 //sequelize.sync({ alter: true });
 
