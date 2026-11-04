@@ -619,6 +619,10 @@ Aplica las siguientes reglas de normalización:
 Excepciones:
 - Si no viene el RUT en el documento, devuelve una cadena vacía ("") en ese campo.
 
+Para el campo "total", si no viene en el documento, devuelve 0.
+Para el campo "total", si viene un valor neto usarlo en lugar del total.
+
+
 Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta (sin texto adicional ni bloques markdown fuera del JSON si vas a parsearlo automáticamente):
 {
   "rut": "...",
