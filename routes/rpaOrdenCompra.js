@@ -150,6 +150,10 @@ async function generarOrdenCompra(pedido) {
     await botonAdjudicar.waitFor({ state: 'visible' });
     await botonAdjudicar.click();
 
+    const botonGeneraOC = frame.locator('#ctl11_btnGeneraOC');
+    await botonGeneraOC.waitFor({ state: 'visible' });
+    await botonGeneraOC.click();
+
 
 }
 
