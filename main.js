@@ -48,6 +48,8 @@ app.use("/privilegio", privilegioRoutes);
 var { RpaPedidoRoutes, reprogramaRpaPedidos } = require("./routes/rpaPedidos");
 app.use("/rpaPedidos", RpaPedidoRoutes);
 
+var rpaOrdenCompraRoutes = require("./routes/rpaOrdenCompra");
+app.use("/rpaOrdenCompra", rpaOrdenCompraRoutes);
 
 app.use(express.static(path.join(__dirname, "../front/dist")));
 
