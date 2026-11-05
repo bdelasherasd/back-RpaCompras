@@ -71,7 +71,7 @@ const encolaProcesoOrden = async (pedido) => {
         browser = await chromium.launch({ headless: false });
         page = await browser.newPage();
 
-        await page.goto(urlfin700);
+        await page.goto(urlfin700, { timeout: 5000 });
 
         await loginFin700();
         console.log("Login successful");
@@ -104,9 +104,9 @@ async function loginFin700() {
 async function navegaMenus(pedido) {
     try {
         // Implement the navigation logic here
-        await page.getByText('Transacciones').click({ timeout: 2000 });
-        await page.getByText('Adquisiciones').click({ timeout: 2000 });
-        await page.getByText('Preparación de Compras').click({ timeout: 2000 });
+        await page.getByText('Transacciones').click({ timeout: 5000 });
+        await page.getByText('Adquisiciones').click({ timeout: 5000 });
+        await page.getByText('Preparación de Compras').click({ timeout: 5000 });
         await page.getByRole('link', { name: 'Proceso de Compras' }).click();
 
         let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
@@ -141,6 +141,15 @@ async function generarOrdenCompra(pedido) {
     await frame.locator('#ctl11_ChkTodos').check();
 
     await page.waitForTimeout(1000);
+
+    const botonGuardar = frame.locator('#ctl11_BtnGuardar');
+    await botonGuardar.waitFor({ state: 'visible' });
+    await botonGuardar.click();
+
+    const botonAdjudicar = frame.locator('#ctl11_BtnAdjudicar');
+    await botonAdjudicar.waitFor({ state: 'visible' });
+    await botonAdjudicar.click();
+
 
 }
 
