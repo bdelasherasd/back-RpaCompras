@@ -57,6 +57,11 @@ const GenerarOrdenCompra = async () => {
         console.error("Error generando orden de compra:", error);
     } finally {
         generandoOrdenCompra = false;
+        if (browser) {
+            await browser.close();
+        }
+        browser = null;
+        page = null;
     }
 }
 
@@ -70,7 +75,7 @@ const encolaProcesoOrden = async (pedido) => {
 
         await loginFin700();
         console.log("Login successful");
-        await navegaMenus();
+        await navegaMenus(pedido);
         await generarOrdenCompra(pedido);
     } catch (error) {
         console.error(`Error procesando orden de compra para pedido ID: ${pedido.id}`, error);
@@ -79,28 +84,43 @@ const encolaProcesoOrden = async (pedido) => {
 
 async function loginFin700() {
     // Implement the login logic here
-    const uidfin700 = process.env.uidfin700;
-    const pwdfin700 = process.env.pwdfin700;
+    try {
+        const uidfin700 = process.env.uidfin700;
+        const pwdfin700 = process.env.pwdfin700;
 
-    const uidInput = page.locator('#ctl02_TxtIdPersona');
-    await uidInput.fill(uidfin700);
-    const pwdInput = page.locator('#ctl02_TxtClave');
-    await pwdInput.fill(pwdfin700);
+        const uidInput = page.locator('#ctl02_TxtIdPersona');
+        await uidInput.fill(uidfin700);
+        const pwdInput = page.locator('#ctl02_TxtClave');
+        await pwdInput.fill(pwdfin700);
 
-    const botonSubmit = page.locator('#func0');
-    await botonSubmit.click();
-
+        const botonSubmit = page.locator('#func0');
+        await botonSubmit.click();
+    } catch (error) {
+        console.error("Error during login:", error);
+        throw error;
+    }
 }
 
-async function navegaMenus() {
-    // Implement the navigation logic here
-    await page.getByText('Transacciones').click();
-    await page.getByText('Adquisiciones').click();
-    await page.getByText('Preparación de Compras').click();
-    await page.getByRole('link', { name: 'Proceso de Compras' }).click();
+async function navegaMenus(pedido) {
+    try {
+        // Implement the navigation logic here
+        await page.getByText('Transacciones').click({ timeout: 2000 });
+        await page.getByText('Adquisiciones').click({ timeout: 2000 });
+        await page.getByText('Preparación de Compras').click({ timeout: 2000 });
+        await page.getByRole('link', { name: 'Proceso de Compras' }).click();
 
-    let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
-    await frame.getByRole('button', { name: 'Nuevo' }).click();
+        let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
+
+        await frame.locator('#ctl11_EmpRazonSocial_EmpRazonSocial_texto').click();
+        await frame.locator('#ctl11_EmpRazonSocial_EmpRazonSocial_texto').press('ControlOrMeta+a');
+        await frame.locator('#ctl11_EmpRazonSocial_EmpRazonSocial_texto').fill(pedido.empId.toString());
+        await frame.locator('#ctl11_EmpRazonSocial_EmpRazonSocial_texto').press('Tab');
+
+        await frame.getByRole('button', { name: 'Nuevo' }).click({ timeout: 2000 });
+    } catch (error) {
+        console.error(`Error navegando menús para pedido ID: ${pedido.id}`, error);
+        throw error;
+    }
 }
 
 async function generarOrdenCompra(pedido) {
@@ -108,12 +128,19 @@ async function generarOrdenCompra(pedido) {
     console.log(`Generando orden de compra para pedido ID: ${pedido.id}`);
 
     let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
-    await frame.locator('#ctl11_FiltroPedido').selectOption('0');
     await page.waitForTimeout(1000);
 
-    await frame.locator('#ctl11_PedidoDesde').fill(pedido.NroPedido.toString());
+    await frame.locator('#ctl11_FiltroPedido').selectOption('0');
+
+    // seleccionar el pedido desde
+    await frame.locator('#ctl11_PedidoDesde').fill(pedido.nroPedido.toString());
     await frame.locator('#ctl11_PedidoDesde').press('Tab');
 
+    await frame.locator('#ctl11_BtnBuscar').click();
+
+    await frame.locator('#ctl11_ChkTodos').check();
+
+    await page.waitForTimeout(1000);
 
 }
 
