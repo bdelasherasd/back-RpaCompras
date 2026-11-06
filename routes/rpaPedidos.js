@@ -468,8 +468,9 @@ const getDataFin700 = async (pedido) => {
         INNER JOIN Usu_Usuarios Usu ON PedCab.UsuarioProceso = Usu.ID_USUARIO 
         LEFT JOIN GlbT_Entidad Ent ON Ent.EntId = PedDet.pEntId
         INNER JOIN GlbT_Monedas Mon ON Mon.MonedaId = PedDet.pMonedaId
-        WHERE Cab.ConEstCod = 1 
-        AND Cab.UsuarioProceso = 'RPAADQ'
+        WHERE --Cab.ConEstCod = 1 
+        --AND 
+        Cab.UsuarioProceso = 'RPAADQ'
         AND PedCab.pEmpId = ${pedido.empId}
         AND PedCab.PedidoMaterialId = ${pedido.nroPedido}
         GROUP BY 
@@ -609,7 +610,10 @@ const iaParaPdf = async (pedido) => {
 const AIGoogle = async (filePart, pedido) => {
     //const prompt = "Analiza este documento y extrae el RUT de la empresa emisora, el monto total y el tipo de moneda. Para pesos devuelve $, para dolar devuelve US$, para UF devueve UF. Devuelve la información en formato JSON.";
     const EXTRACTION_PROMPT = `
-Analiza el documento adjunto y extrae los siguientes datos: el RUT de la empresa emisora, el monto total y el tipo de moneda.
+Analiza el documento adjunto y extrae los siguientes datos: 
+el RUT de la empresa emisora, el monto total y el tipo de moneda.
+indicador si o no si el documento tiene una firma electrónica avanzada legalmente válida.
+indicador si o no si el documento tiene una firma manuscrita.
 
 Aplica las siguientes reglas de normalización:
 - Para tipo de moneda CLP, $, PESOS (o variaciones similares): devuelve "$".
@@ -627,7 +631,9 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
 {
   "rut": "...",
   "total": 0,
-  "moneda": "..."
+  "moneda": "...",
+  "firmaElectronica": "si/no",
+  "firmaManuscrita": "si/no"
 }
 `;
 
@@ -644,8 +650,10 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
                     rut: { type: Type.STRING, description: "RUT chileno o identificador fiscal" },
                     total: { type: Type.NUMBER, description: "Monto total de la transacción" },
                     moneda: { type: Type.STRING, description: "Código de moneda, ej: $, US$ o UF" },
+                    firmaElectronica: { type: Type.STRING, description: "si/no" },
+                    firmaManuscrita: { type: Type.STRING, description: "si/no" },
                 },
-                required: ["rut", "total", "moneda"],
+                required: ["rut", "total", "moneda", "firmaElectronica", "firmaManuscrita"],
             },
         },
     });
@@ -658,6 +666,8 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
                 iaRut: limpiaRut(dataIa.rut),
                 iaTotal: dataIa.total,
                 iaMoneda: dataIa.moneda,
+                iaFirmaElectronica: dataIa.firmaElectronica,
+                iaFirmaManuscrita: dataIa.firmaManuscrita,
             },
             {
                 where: {

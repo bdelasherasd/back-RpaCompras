@@ -46,7 +46,7 @@ const GenerarOrdenCompra = async () => {
     if (generandoOrdenCompra) return;
     generandoOrdenCompra = true;
     try {
-        const sql = `SELECT top 1 * FROM rpaPedidos WHERE NroOc = 0 and okParaOc = 1`;
+        const sql = `SELECT top 1 * FROM rpaPedidos WHERE NroOc = 0 and okParaOc = 1 and porValidar = 0`;
         const pendientes = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
         for (const pedido of pendientes) {
             console.log(`Iniciando generación de orden de compra para pedido ID: ${pedido.id}`);
@@ -57,11 +57,6 @@ const GenerarOrdenCompra = async () => {
         console.error("Error generando orden de compra:", error);
     } finally {
         generandoOrdenCompra = false;
-        if (browser) {
-            await browser.close();
-        }
-        browser = null;
-        page = null;
     }
 }
 
@@ -79,6 +74,12 @@ const encolaProcesoOrden = async (pedido) => {
         await generarOrdenCompra(pedido);
     } catch (error) {
         console.error(`Error procesando orden de compra para pedido ID: ${pedido.id}`, error);
+    } finally {
+        if (browser) {
+            await browser.close();
+        }
+        browser = null;
+        page = null;
     }
 }
 
@@ -128,7 +129,22 @@ async function generarOrdenCompra(pedido) {
     console.log(`Generando orden de compra para pedido ID: ${pedido.id}`);
 
     let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(3000);
+
+    // 1. Esperar a que la tabla sea visible en la página
+    // const tablaPedidos = page.locator('#ctl11_TabPedidos');
+    // await tablaPedidos.waitFor({ state: 'visible' });
+
+    // // 2. Esperar específicamente a que aparezcan las filas de datos (tr con clase DataGridItem o DataGridAlternatingItem)
+    // await page.locator('#ctl11_TabPedidos tr.DataGridItem, #ctl11_TabPedidos tr.DataGridAlternatingItem').first().waitFor({ state: 'visible' });
+
+    // console.log('¡La tabla de pedidos tiene datos cargados!');
+
+
+    await page.waitForFunction(() => {
+        const filas = document.querySelectorAll('#ctl11_TabPedidos tr.DataGridItem, #ctl11_TabPedidos tr.DataGridAlternatingItem');
+        return filas.length > 0; // Retorna true tan pronto como haya al menos 1 fila de datos
+    });
 
     await frame.locator('#ctl11_FiltroPedido').selectOption('0');
 
@@ -149,6 +165,11 @@ async function generarOrdenCompra(pedido) {
     const botonAdjudicar = frame.locator('#ctl11_BtnAdjudicar');
     await botonAdjudicar.waitFor({ state: 'visible' });
     await botonAdjudicar.click();
+
+    await frame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto').click();
+    await frame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto').press('ControlOrMeta+a');
+    await frame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto').fill('1');
+    await frame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto').press('Tab');
 
     const botonGeneraOC = frame.locator('#ctl11_btnGeneraOC');
     await botonGeneraOC.waitFor({ state: 'visible' });

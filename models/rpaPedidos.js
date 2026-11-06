@@ -21,7 +21,9 @@ var rpaPedidos = sequelize.define("rpaPedidos", {
   NroOc: type.INTEGER,
   totalPedido: type.FLOAT,
   monedaPedido: type.STRING,
-  rutPedido: type.STRING
+  rutPedido: type.STRING,
+  iaFirmaElectronica: type.STRING,
+  iaFirmaManuscrita: type.STRING
 });
 //sequelize.sync({ alter: true });
 
