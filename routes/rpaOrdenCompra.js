@@ -118,6 +118,8 @@ async function navegaMenus(pedido) {
         await frame.locator('#ctl11_EmpRazonSocial_EmpRazonSocial_texto').press('Tab');
 
         await frame.getByRole('button', { name: 'Nuevo' }).click({ timeout: 2000 });
+        // esperar a que cargue la página y este lista
+        await page.waitForLoadState('load');
     } catch (error) {
         console.error(`Error navegando menús para pedido ID: ${pedido.id}`, error);
         throw error;
@@ -141,10 +143,6 @@ async function generarOrdenCompra(pedido) {
     // console.log('¡La tabla de pedidos tiene datos cargados!');
 
 
-    await page.waitForFunction(() => {
-        const filas = document.querySelectorAll('#ctl11_TabPedidos tr.DataGridItem, #ctl11_TabPedidos tr.DataGridAlternatingItem');
-        return filas.length > 0; // Retorna true tan pronto como haya al menos 1 fila de datos
-    });
 
     await frame.locator('#ctl11_FiltroPedido').selectOption('0');
 
