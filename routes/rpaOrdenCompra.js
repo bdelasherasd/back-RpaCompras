@@ -4,6 +4,7 @@ const { chromium } = require('playwright'); // Assuming Playwright is used for b
 // var cors = require("cors");
 var sequelize = require("../models/sequelizeConnection");
 var sequelizeFin700 = require("../models/sequelizeFin700");
+const { get } = require("selenium-webdriver/http");
 // const showLog = require("../middleware/showLog");
 // const rpaPedidos = require("../models/rpaPedidos");
 // const { chromium } = require('playwright');
@@ -72,6 +73,7 @@ const encolaProcesoOrden = async (pedido) => {
         console.log("Login successful");
         await navegaMenus(pedido);
         await generarOrdenCompra(pedido);
+        await apruebaOrdenCompra(pedido);
     } catch (error) {
         console.error(`Error procesando orden de compra para pedido ID: ${pedido.id}`, error);
     } finally {
@@ -110,6 +112,8 @@ async function navegaMenus(pedido) {
         await page.getByText('Preparación de Compras').click({ timeout: 5000 });
         await page.getByRole('link', { name: 'Proceso de Compras' }).click();
 
+        await page.waitForLoadState('load');
+
         let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
 
         await frame.locator('#ctl11_EmpRazonSocial_EmpRazonSocial_texto').click();
@@ -133,15 +137,6 @@ async function generarOrdenCompra(pedido) {
     let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
     await page.waitForTimeout(3000);
 
-    // 1. Esperar a que la tabla sea visible en la página
-    // const tablaPedidos = page.locator('#ctl11_TabPedidos');
-    // await tablaPedidos.waitFor({ state: 'visible' });
-
-    // // 2. Esperar específicamente a que aparezcan las filas de datos (tr con clase DataGridItem o DataGridAlternatingItem)
-    // await page.locator('#ctl11_TabPedidos tr.DataGridItem, #ctl11_TabPedidos tr.DataGridAlternatingItem').first().waitFor({ state: 'visible' });
-
-    // console.log('¡La tabla de pedidos tiene datos cargados!');
-
 
 
     await frame.locator('#ctl11_FiltroPedido').selectOption('0');
@@ -151,6 +146,7 @@ async function generarOrdenCompra(pedido) {
     await frame.locator('#ctl11_PedidoDesde').press('Tab');
 
     await frame.locator('#ctl11_BtnBuscar').click();
+    await page.waitForLoadState('load');
 
     await frame.locator('#ctl11_ChkTodos').check();
 
@@ -159,12 +155,15 @@ async function generarOrdenCompra(pedido) {
     const botonGuardar = frame.locator('#ctl11_BtnGuardar');
     await botonGuardar.waitFor({ state: 'visible' });
     await botonGuardar.click();
+    await page.waitForLoadState('load');
 
     const botonAdjudicar = frame.locator('#ctl11_BtnAdjudicar');
     await botonAdjudicar.waitFor({ state: 'visible' });
     await botonAdjudicar.click();
+    await page.waitForLoadState('load');
 
     await frame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto').click();
+    await page.waitForLoadState('load');
     await frame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto').press('ControlOrMeta+a');
     await frame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto').fill('1');
     await frame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto').press('Tab');
@@ -172,8 +171,95 @@ async function generarOrdenCompra(pedido) {
     const botonGeneraOC = frame.locator('#ctl11_btnGeneraOC');
     await botonGeneraOC.waitFor({ state: 'visible' });
     await botonGeneraOC.click();
+    await page.waitForLoadState('load');
 
 
+    await frame.locator('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a').click();
+    await page.waitForLoadState('load');
+
+    console.log(`Orden de compra generada para pedido ID: ${pedido.id}`);
+}
+
+const apruebaOrdenCompra = async (pedido) => {
+
+    await page.getByText('Administración de Compras').click({ timeout: 5000 });
+    await page.getByRole('link', { name: 'Orden de Compra' }).click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').click();
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('ControlOrMeta+a');
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').fill(pedido.entId.toString());
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('Tab');
+
+    await frame.locator('#ctl11_FiltroFolio').selectOption('0');
+
+    let nroOc = await getNroOc(pedido);
+
+    // seleccionar el pedido desde
+    await frame.locator('#ctl11_OcCabIdDesde').fill(nroOc.toString());
+    await frame.locator('#ctl11_OcCabIdDesde').press('Tab');
+
+    // Click the search button to find the order
+    await frame.locator('#ctl11_BtnBuscar').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#ctl11_TabOC_div > table > tbody > tr.DataGridItem > td:nth-child(5) > a').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#ctl11_hylContactos').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#ctl11_TabContactos > tbody > tr.DataGridItem > td:nth-child(1) > a').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#lnk10').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#mmlink0').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#ctl11_btnVolver').click();
+    await page.waitForLoadState('load');
+
+    const visador = process.env.visador;
+
+    await frame.locator('#ctl11_txtNombre').click();
+    await frame.locator('#ctl11_txtNombre').press('ControlOrMeta+a');
+    await frame.locator('#ctl11_txtNombre').fill(visador);
+    await frame.locator('#ctl11_txtNombre').press('Tab');
+
+    await frame.locator('#ctl11_BtnBuscar').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#ctl11_TablaPaginada1_rbl_0').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#ctl11_btnSeleccionar').click();
+    await page.waitForLoadState('load');
+
+    await frame.locator('#btn1').click();
+    await page.waitForLoadState('load');
+
+
+
+}
+
+const getNroOc = async (pedido) => {
+    // Implement the logic to get the order number based on the pedido object
+    // This is a placeholder implementation and should be replaced with actual logic
+
+    const sql =
+        `SELECT ocCabId FROM adqt_occab 
+      WHERE pempid = ${pedido.empId}
+        AND usuarioProceso = '${process.env.uidfin700}'
+        AND numSolicitud = ${pedido.nroPedido}`;
+
+    let result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
+    if (result.length > 0) {
+        return result[0].ocCabId;
+    }
+
+    return null; // Return null if no order number is found 
 }
 
 module.exports = router;
