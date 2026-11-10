@@ -14,6 +14,7 @@ const path = require('path');
 const axios = require('axios');
 const { GoogleGenAI, Type } = require('@google/genai');
 const readXlsxFile = require('read-excel-file/node');
+const { ok } = require("assert");
 
 
 
@@ -129,7 +130,7 @@ var reprograma = function (taskdata, idTask) {
 
 async function getPedidos(nroPedido) {
     const query = `
-    SELECT PedCab.pEmpId EmpId, PedCab.PedidoMaterialId AS NumPedido 
+    SELECT PedCab.pEmpId EmpId, PedCab.PedidoMaterialId AS NumPedido, PedCab.pListaPreCabId as ListaPrecios 
     FROM Adqt_ProcesoCompraCab Cab 
     INNER JOIN AdqT_ProcesoCompraDet ProDet ON Cab.ProCompraCabId = ProDet.pProCompraCabId 
     INNER JOIN LogT_PedidoMaterialDet PedDet ON ProDet.pPedidoMaterialDetId = PedDet.PedidoMaterialDetId 
@@ -138,7 +139,7 @@ async function getPedidos(nroPedido) {
     WHERE Cab.ConEstCod = 1 
       AND Cab.UsuarioProceso = 'RPAADQ'
       and (PedCab.PedidoMaterialId = ${nroPedido} or ${nroPedido} = 0)
-    GROUP BY PedCab.pEmpId, PedCab.PedidoMaterialId`.replace(/[\r\n]+/g, " ");
+    GROUP BY PedCab.pEmpId, PedCab.PedidoMaterialId, PedCab.pListaPreCabId`.replace(/[\r\n]+/g, " ");
 
 
     let data = await sequelizeFin700.query(query);
@@ -160,7 +161,7 @@ const procesaData = async (nroPedido) => {
 
         await navegaMenus();
         for (let pedido of NroDePedidos) {
-            await procesaPedido(pedido.EmpId, pedido.NumPedido);
+            await procesaPedido(pedido.EmpId, pedido.NumPedido, pedido.ListaPrecios);
         }
         console.log("Finished processing all pedidos.");
         await browser.close();
@@ -199,7 +200,7 @@ async function navegaMenus() {
     await frame.getByRole('button', { name: 'Buscar' }).click();
 }
 
-async function procesaPedido(empId, nroPedido) {
+async function procesaPedido(empId, nroPedido, listaPrecios) {
     // Implement the logic to process a single pedido here
 
     const frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
@@ -272,6 +273,14 @@ async function procesaPedido(empId, nroPedido) {
         await page.waitForTimeout(1000);
     } else {
         console.log(`No hay líneas de documentos físicos para procesar.`);
+
+        let porValidar = true;
+        let okParaOC = false;
+        if (listaPrecios != 0) {
+            porValidar = false;
+            okParaOC = true;
+        }
+
         await rpaPedidos.create({
             empId: empId,
             nroPedido: nroPedido,
@@ -279,11 +288,11 @@ async function procesaPedido(empId, nroPedido) {
             iaRut: '',
             iaTotal: 0,
             iaMoneda: '',
-            porValidar: true,
+            porValidar: porValidar,
             okRut: false,
             okTotal: false,
             okMoneda: false,
-            okParaOC: false,
+            okParaOC: okParaOC,
             NroOc: 0,
             totalPedido: totalPedidoFloat,
             monedaPedido: monedaPedido
@@ -427,19 +436,19 @@ const encolaValidacion = async (pedido) => {
     validandoPedidos = true;
     try {
         // Aquí iría la lógica para procesar la validación del pedido
-        await getDataFin700(pedido);
+        let listaPrecios = await getDataFin700(pedido);
 
         console.log(`Validando pedido ID: ${pedido.id}`);
         // Simulación de procesamiento
         const extension = pedido.archivo.split('.').pop();
         if (extension === 'pdf') {
-            await iaParaPdf(pedido);
+            await iaParaPdf(pedido, listaPrecios);
         } else if (extension === 'jpg' || extension === 'jpeg' || extension === 'png') {
-            await iaParaImagen(pedido);
+            await iaParaImagen(pedido, listaPrecios);
         } else if (extension === 'xlsx' || extension === 'xls') {
-            await iaParaExcel(pedido);
+            await iaParaExcel(pedido, listaPrecios);
         } else {
-            await iaSinArchivoValido(pedido);
+            await iaSinArchivoValido(pedido, listaPrecios);
         }
         await new Promise(resolve => setTimeout(resolve, 2000));
         console.log(`Pedido ID: ${pedido.id} validado correctamente.`);
@@ -459,7 +468,8 @@ const getDataFin700 = async (pedido) => {
             PedCab.PedidoMaterialId AS NumPedido, 
             isNull(Ent.EntRut, '') AS EntRut, 
             PedDet.pMonedaId, 
-            RTRIM(Mon.MonSimbolo) AS MonSimbolo, 
+            RTRIM(Mon.MonSimbolo) AS MonSimbolo,
+            PedCab.pListaPreCabId AS ListaPrecios,
             sum(PedDet.ValorUniOpeMoneda * PedDet.Cantidad) TotalPedido 
         FROM Adqt_ProcesoCompraCab Cab 
         INNER JOIN AdqT_ProcesoCompraDet ProDet ON Cab.ProCompraCabId = ProDet.pProCompraCabId 
@@ -478,7 +488,8 @@ const getDataFin700 = async (pedido) => {
             PedCab.PedidoMaterialId, 
             Ent.EntRut, 
             PedDet.pMonedaId, 
-            Mon.MonSimbolo;
+            Mon.MonSimbolo,
+            PedCab.pListaPreCabId;
 `;
     const result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
     const data = result[0];
@@ -486,7 +497,7 @@ const getDataFin700 = async (pedido) => {
         { rutPedido: limpiaRut(data.EntRut), totalPedido: data.TotalPedido, monedaPedido: data.MonSimbolo },
         { where: { empid: pedido.empId, nroPedido: pedido.nroPedido } }
     );
-    return;
+    return data.ListaPrecios;
 
 }
 
@@ -506,7 +517,7 @@ const limpiaRut = (rut) => {
 };
 
 
-const iaParaExcel = async (pedido) => {
+const iaParaExcel = async (pedido, listaPrecios) => {
     // Lógica para procesar Excel
     console.log(`Procesando Excel para pedido ID: ${pedido.id}`);
     const carpetaExcel = 'downloads';
@@ -519,7 +530,7 @@ const iaParaExcel = async (pedido) => {
             mimeType: 'text/csv' // 'application/pdf', 'image/jpeg', etc.
         },
     };
-    await AIGoogle(filePart, pedido);
+    await AIGoogle(filePart, pedido, listaPrecios);
 }
 
 async function convertirExcelACsvTemporal(rutaExcel) {
@@ -558,7 +569,7 @@ function formatearValorCsv(valor) {
 }
 
 
-const iaParaImagen = async (pedido) => {
+const iaParaImagen = async (pedido, listaPrecios) => {
     // Lógica para procesar imagen
     const carpetaPdf = 'downloads';
     const archivoExcel = `${carpetaPdf}/${pedido.archivo}`;
@@ -569,18 +580,24 @@ const iaParaImagen = async (pedido) => {
             mimeType: 'image/jpeg' // 'application/pdf', 'image/jpeg', etc.
         },
     };
-    await AIGoogle(filePart, pedido);
+    await AIGoogle(filePart, pedido, listaPrecios);
 
 }
 
-const iaSinArchivoValido = async (pedido) => {
+const iaSinArchivoValido = async (pedido, listaPrecios) => {
     // Lógica para manejar archivos no válidos
+    if (listaPrecios != 0) {
+        okParaOC = true;
+    } else {
+        okParaOC = false;
+    }
     const [rowsUpdated] = await rpaPedidos.update(
         {
             iaRut: '',
             iaTotal: 0,
             iaMoneda: '',
-            porValidar: false
+            porValidar: false,
+            okParaOC: okParaOC
         },
         {
             where: {
@@ -591,7 +608,7 @@ const iaSinArchivoValido = async (pedido) => {
     console.log(`Archivo no válido para pedido ID: ${pedido.id}`);
 }
 
-const iaParaPdf = async (pedido) => {
+const iaParaPdf = async (pedido, listaPrecios) => {
     // Lógica para procesar Excel
     console.log(`Procesando Excel para pedido ID: ${pedido.id}`);
     const carpetaPdf = 'downloads';
@@ -603,11 +620,11 @@ const iaParaPdf = async (pedido) => {
             mimeType: 'application/pdf' // 'application/pdf', 'image/jpeg', etc.
         },
     };
-    await AIGoogle(filePart, pedido);
+    await AIGoogle(filePart, pedido, listaPrecios);
 
 }
 
-const AIGoogle = async (filePart, pedido) => {
+const AIGoogle = async (filePart, pedido, listaPrecios) => {
     //const prompt = "Analiza este documento y extrae el RUT de la empresa emisora, el monto total y el tipo de moneda. Para pesos devuelve $, para dolar devuelve US$, para UF devueve UF. Devuelve la información en formato JSON.";
     const EXTRACTION_PROMPT = `
 Analiza el documento adjunto y extrae los siguientes datos: 
@@ -686,16 +703,21 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
     });
 
     if (dataPedido) {
-        const okRut = dataPedido.rutPedido == dataPedido.iaRut;
+        const okRut = dataPedido.rutPedido == dataPedido.iaRut && dataPedido.rutPedido !== null && dataPedido.rutPedido !== "";
         const okTotal = dataPedido.totalPedido == dataPedido.iaTotal;
         const okMoneda = dataPedido.monedaPedido == dataPedido.iaMoneda;
+
+        let okParaOC = okRut && okTotal && okMoneda;
+        if (listaPrecios != 0) {
+            okParaOC = true;
+        }
 
         await rpaPedidos.update(
             {
                 okRut,
                 okTotal,
                 okMoneda,
-                okParaOC: okRut && okTotal && okMoneda,
+                okParaOC: okParaOC,
                 porValidar: false
             },
             {

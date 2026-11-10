@@ -6,7 +6,7 @@ var sequelize = require("../models/sequelizeConnection");
 var sequelizeFin700 = require("../models/sequelizeFin700");
 const { get } = require("selenium-webdriver/http");
 // const showLog = require("../middleware/showLog");
-// const rpaPedidos = require("../models/rpaPedidos");
+const rpaPedidos = require("../models/rpaPedidos");
 // const { chromium } = require('playwright');
 // require("dotenv").config({ path: "variables.env" });
 
@@ -38,7 +38,8 @@ router.options("*", async function (req, res) {
 // Validador de pedidos
 const INTERVALO_SEGUNDOS = 15;
 setInterval(async () => {
-    await GenerarOrdenCompra();
+    //await GenerarOrdenCompra();
+    await aprobarOrdenCompra();
 }, INTERVALO_SEGUNDOS * 1000);
 
 let generandoOrdenCompra = false;
@@ -61,18 +62,72 @@ const GenerarOrdenCompra = async () => {
     }
 }
 
+let aprobandoOrdenCompra = false;
+
+const aprobarOrdenCompra = async () => {
+    if (aprobandoOrdenCompra) return;
+    aprobandoOrdenCompra = true;
+    try {
+        let NumSolicitud;
+        const sql = `select NumSolicitud, OcCabId 
+                       from adqt_occab 
+                      where usuarioProceso = '${process.env.uidfin700}' 
+                        and ConEstCod=1
+                      order by OcCabId`;
+        const result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
+        if (result.length > 0) {
+            NumSolicitud = result[0].NumSolicitud;
+            const sql = `SELECT top 1 * FROM rpaPedidos 
+                          WHERE NroPedido = ${NumSolicitud}`;
+            const pendientes = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
+            for (const pedido of pendientes) {
+                console.log(`Iniciando aprobación de orden de compra para pedido ID: ${pedido.id}`);
+                await encolaAprobacionOrden(pedido);
+            }
+        }
+    } catch (error) {
+        console.error("Error aprobando orden de compra:", error);
+    } finally {
+        aprobandoOrdenCompra = false;
+    }
+}
+
 const encolaProcesoOrden = async (pedido) => {
     const urlfin700 = process.env.urlfin700;
     try {
         browser = await chromium.launch({ headless: false });
         page = await browser.newPage();
 
-        await page.goto(urlfin700, { timeout: 5000 });
+        await page.goto(urlfin700, { timeout: 20000 });
 
         await loginFin700();
         console.log("Login successful");
         await navegaMenus(pedido);
-        await generarOrdenCompra(pedido);
+        if (await pedidoSinOc(pedido)) {
+            await generarOrdenCompra(pedido);
+        }
+    } catch (error) {
+        console.error(`Error procesando orden de compra para pedido ID: ${pedido.id}`, error);
+    } finally {
+        if (browser) {
+            await browser.close();
+        }
+        browser = null;
+        page = null;
+    }
+}
+
+const encolaAprobacionOrden = async (pedido) => {
+    // Implement the logic for enqueuing order approval
+    const urlfin700 = process.env.urlfin700;
+    try {
+        browser = await chromium.launch({ headless: false });
+        page = await browser.newPage();
+
+        await page.goto(urlfin700, { timeout: 20000 });
+
+        await loginFin700();
+        console.log("Login successful");
         await apruebaOrdenCompra(pedido);
     } catch (error) {
         console.error(`Error procesando orden de compra para pedido ID: ${pedido.id}`, error);
@@ -83,6 +138,19 @@ const encolaProcesoOrden = async (pedido) => {
         browser = null;
         page = null;
     }
+}
+
+const pedidoSinOc = async (pedido) => {
+    sql = `select * from adqt_occab where pempid = ${pedido.empId} and NumSolicitud='${pedido.nroPedido}'`;
+    const result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
+    if (result.length > 0) {
+        pedido.NroOc = result[0].OcCabId;
+        await rpaPedidos.update(
+            { NroOc: pedido.NroOc },
+            { where: { id: pedido.id } }
+        );
+    }
+    return pedido.NroOc === 0;
 }
 
 async function loginFin700() {
@@ -98,6 +166,7 @@ async function loginFin700() {
 
         const botonSubmit = page.locator('#func0');
         await botonSubmit.click();
+        await page.waitForLoadState('load');
     } catch (error) {
         console.error("Error during login:", error);
         throw error;
@@ -107,10 +176,10 @@ async function loginFin700() {
 async function navegaMenus(pedido) {
     try {
         // Implement the navigation logic here
-        await page.getByText('Transacciones').click({ timeout: 5000 });
-        await page.getByText('Adquisiciones').click({ timeout: 5000 });
-        await page.getByText('Preparación de Compras').click({ timeout: 5000 });
-        await page.getByRole('link', { name: 'Proceso de Compras' }).click();
+        await page.getByText('Transacciones').click({ timeout: 20000 });
+        await page.getByText('Adquisiciones').click({ timeout: 20000 });
+        await page.getByText('Preparación de Compras').click({ timeout: 20000 });
+        await page.getByRole('link', { name: 'Proceso de Compras' }).click({ timeout: 20000 });
 
         await page.waitForLoadState('load');
 
@@ -173,29 +242,35 @@ async function generarOrdenCompra(pedido) {
     await botonGeneraOC.click();
     await page.waitForLoadState('load');
 
-
-    await frame.locator('body > div.k-widget.k-window > div.k-window-titlebar.k-hstack > div > a').click();
-    await page.waitForLoadState('load');
-
     console.log(`Orden de compra generada para pedido ID: ${pedido.id}`);
 }
 
 const apruebaOrdenCompra = async (pedido) => {
+    await page.getByText('Transacciones').click({ timeout: 20000 });
+    await page.getByText('Adquisiciones').click({ timeout: 20000 });
+    await page.getByText('Administración de Compra').click({ timeout: 5000 });
 
-    await page.getByText('Administración de Compras').click({ timeout: 5000 });
-    await page.getByRole('link', { name: 'Orden de Compra' }).click();
+    await page.locator('//*[@id="k_panelbar"]/li[2]/ul/li[2]/ul/li[3]/ul/li[1]/a').click();
+
     await page.waitForLoadState('load');
+
+    // #iframe_body
+    let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
+
+
+    await frame.locator('#ctl11_FiltroFolio').selectOption('0');
 
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').click();
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('ControlOrMeta+a');
-    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').fill(pedido.entId.toString());
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').fill(pedido.empId.toString());
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('Tab');
 
-    await frame.locator('#ctl11_FiltroFolio').selectOption('0');
 
     let nroOc = await getNroOc(pedido);
 
     // seleccionar el pedido desde
+    await frame.locator('#ctl11_OcCabIdDesde').click();
+    await frame.locator('#ctl11_OcCabIdDesde').press('ControlOrMeta+a');
     await frame.locator('#ctl11_OcCabIdDesde').fill(nroOc.toString());
     await frame.locator('#ctl11_OcCabIdDesde').press('Tab');
 
@@ -206,10 +281,23 @@ const apruebaOrdenCompra = async (pedido) => {
     await frame.locator('#ctl11_TabOC_div > table > tbody > tr.DataGridItem > td:nth-child(5) > a').click();
     await page.waitForLoadState('load');
 
+
+    const btnCerrarSelector = 'div.k-window div.k-window-actions a.k-window-action[aria-label="Close"]';
+
+    // Verificamos si el popup / botón existe antes de hacer clic para evitar errores
+    const popupCerrar = await page.$(btnCerrarSelector);
+    if (popupCerrar) {
+        await popupCerrar.click();
+    }
+
+
+
     await frame.locator('#ctl11_hylContactos').click();
     await page.waitForLoadState('load');
 
-    await frame.locator('#ctl11_TabContactos > tbody > tr.DataGridItem > td:nth-child(1) > a').click();
+    let popupFrame = await page.locator('#sntPopupWindow1794345519573 > iframe').contentFrame();
+
+    await popupFrame.locator('#ctl11_TabContactos > tbody > tr.DataGridItem > td:nth-child(1) > a').click();
     await page.waitForLoadState('load');
 
     await frame.locator('#lnk10').click();
