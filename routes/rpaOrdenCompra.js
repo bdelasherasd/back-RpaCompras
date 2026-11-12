@@ -374,6 +374,18 @@ const apruebaOrdenCompra = async (pedido) => {
 
     const modalFrame = page.frameLocator('iframe.k-content-frame');
 
+
+    const radioBtn = modalFrame.locator('//*[@id="ctl11_GridObservaciones_rbl_0"]');
+    await radioBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await radioBtn.click();
+    await page.waitForLoadState('load');
+
+
+    const btnGuardar = modalFrame.locator('//*[@id="ctl11_btnGuardar"]');
+    await btnGuardar.waitFor({ state: 'visible', timeout: 10000 });
+    await btnGuardar.click();
+    await page.waitForLoadState('load');
+
     // 2. Ubicar el botón "Volver" dentro de ese iframe
     const btnVolver = modalFrame.locator('#ctl11_btnVolver');
 
