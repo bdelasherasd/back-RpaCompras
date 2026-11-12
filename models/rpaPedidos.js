@@ -17,13 +17,16 @@ var rpaPedidos = sequelize.define("rpaPedidos", {
   okRut: type.BOOLEAN,
   okTotal: type.BOOLEAN,
   okMoneda: type.BOOLEAN,
+  okContacto: type.BOOLEAN,
   okParaOC: type.BOOLEAN,
   NroOc: type.INTEGER,
   totalPedido: type.FLOAT,
   monedaPedido: type.STRING,
   rutPedido: type.STRING,
   iaFirmaElectronica: type.STRING,
-  iaFirmaManuscrita: type.STRING
+  iaFirmaManuscrita: type.STRING,
+  iaEmail: type.STRING,
+  cantidadContactos: type.INTEGER
 });
 //sequelize.sync({ alter: true });
 

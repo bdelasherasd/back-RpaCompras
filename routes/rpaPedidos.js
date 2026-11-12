@@ -631,6 +631,7 @@ Analiza el documento adjunto y extrae los siguientes datos:
 el RUT de la empresa emisora, el monto total y el tipo de moneda.
 indicador si o no si el documento tiene una firma electrónica avanzada legalmente válida.
 indicador si o no si el documento tiene una firma manuscrita.
+email del contacto de la empresa emisora, si no hay disponible devuelve una cadena vacía ("").
 
 Aplica las siguientes reglas de normalización:
 - Para tipo de moneda CLP, $, PESOS (o variaciones similares): devuelve "$".
@@ -650,7 +651,8 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
   "total": 0,
   "moneda": "...",
   "firmaElectronica": "si/no",
-  "firmaManuscrita": "si/no"
+  "firmaManuscrita": "si/no",
+  "email": "..."
 }
 `;
 
@@ -669,8 +671,9 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
                     moneda: { type: Type.STRING, description: "Código de moneda, ej: $, US$ o UF" },
                     firmaElectronica: { type: Type.STRING, description: "si/no" },
                     firmaManuscrita: { type: Type.STRING, description: "si/no" },
+                    email: { type: Type.STRING, description: "Email del contacto de la empresa emisora" },
                 },
-                required: ["rut", "total", "moneda", "firmaElectronica", "firmaManuscrita"],
+                required: ["rut", "total", "moneda", "firmaElectronica", "firmaManuscrita", "email"],
             },
         },
     });
@@ -685,6 +688,7 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
                 iaMoneda: dataIa.moneda,
                 iaFirmaElectronica: dataIa.firmaElectronica,
                 iaFirmaManuscrita: dataIa.firmaManuscrita,
+                iaEmail: dataIa.email
             },
             {
                 where: {
@@ -703,11 +707,14 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
     });
 
     if (dataPedido) {
+        const okContacto = await validaEmail(dataPedido); // Suponiendo que existe una función validaEmail que retorna true si el email es válido
+
+        const cantidadContactos = await getCantidadContactos(dataPedido);
         const okRut = dataPedido.rutPedido == dataPedido.iaRut && dataPedido.rutPedido !== null && dataPedido.rutPedido !== "";
         const okTotal = dataPedido.totalPedido == dataPedido.iaTotal;
         const okMoneda = dataPedido.monedaPedido == dataPedido.iaMoneda;
 
-        let okParaOC = okRut && okTotal && okMoneda;
+        let okParaOC = okRut && okTotal && okMoneda && okContacto;
         if (listaPrecios != 0) {
             okParaOC = true;
         }
@@ -718,7 +725,9 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
                 okTotal,
                 okMoneda,
                 okParaOC: okParaOC,
-                porValidar: false
+                okContacto: okContacto,
+                porValidar: false,
+                cantidadContactos: cantidadContactos
             },
             {
                 where: {
@@ -729,6 +738,66 @@ Devuelve estrictamente un objeto JSON válido con la siguiente estructura exacta
     }
 
 }
+
+async function validaEmail(dataPedido) {
+    if (dataPedido.rutPedido === null || dataPedido.rutPedido === "") return false;
+
+    //formatear el RUT con 10 digitos para el numero agregando ceros a la izquierda mas un guion y su digito verificador
+    const rutSinDigito = dataPedido.rutPedido.split('-')[0];
+    const digitoVerificador = dataPedido.rutPedido.split('-')[1];
+    let rutPedido = rutSinDigito.padStart(10, '0') + '-' + digitoVerificador;
+
+    const sql = `select ec.EntConMail from
+                glbt_entidad en join 
+                glbt_entidadsucursal es on en.entid = es.pentid and es.EntSucNumero >= 1 join
+                GlbT_EntidadSucursalContacto esc on esc.pEntSucId = es.EntSucId join
+                GlbT_EntidadContacto ec on ec.pEntId = en.entid and ec.EntConId = esc.pEntConId
+                where en.entrut = '${rutPedido}'`;
+
+    const result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
+    // Si no hay resultados, el contacto no es válido
+    if (result.length === 0) return false;
+
+    // Si hay un solo contacto en fin700 es suficiente para considerar el email válido
+    if (result.length === 1) return true;
+
+    // Si hay más de un contacto, se valida que el email de dataPedido esté entre ellos
+    if (result.length > 1) {
+
+        if (!dataPedido.iaEmail) return false;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const isValidEmail = emailRegex.test(dataPedido.iaEmail);
+
+
+        // buscar si está dataPedido.iaEmail en los resultados
+        if (isValidEmail) {
+            const emailExists = result.some(row => row.EntConEmail === dataPedido.iaEmail);
+            if (emailExists) return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+
+async function getCantidadContactos(dataPedido) {
+    if (dataPedido.rutPedido === null || dataPedido.rutPedido === "") return 0;
+
+    const rutSinDigito = dataPedido.rutPedido.split('-')[0];
+    const digitoVerificador = dataPedido.rutPedido.split('-')[1];
+    let rutPedido = rutSinDigito.padStart(10, '0') + '-' + digitoVerificador;
+
+    const sql = `select ec.EntConMail from
+                glbt_entidad en join 
+                glbt_entidadsucursal es on en.entid = es.pentid and es.EntSucNumero >= 1 join
+                GlbT_EntidadSucursalContacto esc on esc.pEntSucId = es.EntSucId join
+                GlbT_EntidadContacto ec on ec.pEntId = en.entid and ec.EntConId = esc.pEntConId
+                where en.entrut = '${rutPedido}'`;
+
+    const result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
+    return result.length;
+}
+
 
 exports.RpaPedidoRoutes = router;
 exports.reprogramaRpaPedidos = reprograma;

@@ -36,7 +36,7 @@ router.options("*", async function (req, res) {
 
 
 // Validador de pedidos
-const INTERVALO_SEGUNDOS = 15;
+const INTERVALO_SEGUNDOS = 1;
 setInterval(async () => {
     //await GenerarOrdenCompra();
     await aprobarOrdenCompra();
@@ -281,7 +281,7 @@ const apruebaOrdenCompra = async (pedido) => {
     await frame.locator('#ctl11_TabOC_div > table > tbody > tr.DataGridItem > td:nth-child(5) > a').click();
     await page.waitForLoadState('load');
 
-
+    await page.waitForTimeout(3000);
     const btnCerrarSelector = 'div.k-window div.k-window-actions a.k-window-action[aria-label="Close"]';
 
     // Verificamos si el popup / botón existe antes de hacer clic para evitar errores
@@ -295,19 +295,93 @@ const apruebaOrdenCompra = async (pedido) => {
     await frame.locator('#ctl11_hylContactos').click();
     await page.waitForLoadState('load');
 
-    let popupFrame = await page.locator('#sntPopupWindow1794345519573 > iframe').contentFrame();
+    await page.waitForTimeout(3000);
+    // 1. Acceder al contexto del iframe emergente
+    const iframeLocator = page.frameLocator('iframe.k-content-frame');
 
-    await popupFrame.locator('#ctl11_TabContactos > tbody > tr.DataGridItem > td:nth-child(1) > a').click();
+    const correos = await leerTodosLosCorreosConPaginacion(page);
+
+    const numCorreos = pedido.cantidadContactos || 0;
+
+    if (numCorreos <= 1) {
+        // 2. Seleccionar y hacer clic exclusivamente en el primer enlace de selección disponible
+        await iframeLocator.locator('a.HyperLink[href*="TabContactos"]').first().click();
+        await page.waitForLoadState('load');
+    } else {
+        const iaEmail = pedido.iaEmail || '';
+        // Seleccionar el enlace de contacto que coincida con el correo de IA
+        const enlaceContacto = await iframeLocator.locator(`a.HyperLink[href*="TabContactos"]`).filter({ hasText: iaEmail }).first();
+        if (await enlaceContacto.count() > 0) {
+            await enlaceContacto.click();
+            await page.waitForLoadState('load');
+        } else {
+            // Si no se encuentra el enlace con el correo de IA, hacer clic en el primer enlace disponible
+            await iframeLocator.locator('a.HyperLink[href*="TabContactos"]').first().click();
+            await page.waitForLoadState('load');
+        }
+    }
+
+
+
+
+
+
+    //--------------------------------------------------------------------------
+    // 1. Apuntar directamente al iframe donde opera tu formulario
+    const iframeBody = page.frameLocator('iframe#iframe_body');
+
+    // 2. Ubicar el botón "Opciones" que está DENTRO del iframe
+    const menuDiv = iframeBody.locator('div#lnk10');
+
+    // Asegurarnos de que el botón de opciones esté visible en el formulario
+    await menuDiv.waitFor({ state: 'visible', timeout: 10000 });
+
+    // 3. Hacer hover o simular el foco directamente sobre "Opciones"
+    await menuDiv.hover();
+    await page.waitForTimeout(600); // Pausa para que el ERP pinte el submenú flotante
+
+    // 4. Buscar el enlace de la opción que se despliega (usando un selector flexible por si cambia de número)
+    const optionLink = iframeBody.locator('a[name="mM1"], a[id^="mmlink"]');
+
+    // Esperar a que el enlace aparezca en el DOM del iframe
+    await optionLink.first().waitFor({ state: 'attached', timeout: 5000 });
+
+    // 5. Ejecutar la acción mediante evaluate para forzar el _itemRef y el clic de Sonda
+    await optionLink.first().evaluate((el) => {
+        // Disparar el evento mouseover para que la función _p1(this) asigne el _itemRef
+        const mouseOverEvent = new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window });
+        el.dispatchEvent(mouseOverEvent);
+
+        // Si la función global $K existe y tiene referencia, la llamamos; si no, hacemos click nativo
+        if (typeof window.$K === 'function' && el._itemRef) {
+            window.$K(el._itemRef);
+        } else {
+            el.click();
+        }
+    });
+
+    console.log('¡Opción del menú ejecutada con éxito en el formulario!');
+    //--------------------------------------
+
+
+
+
+
+
+
+
+    await page.waitForTimeout(1500);
+
+    const modalFrame = page.frameLocator('iframe.k-content-frame');
+
+    // 2. Ubicar el botón "Volver" dentro de ese iframe
+    const btnVolver = modalFrame.locator('#ctl11_btnVolver');
+
+    // 3. Asegurar que esté visible y hacer clic
+    await btnVolver.waitFor({ state: 'visible', timeout: 10000 });
+    await btnVolver.click();
     await page.waitForLoadState('load');
 
-    await frame.locator('#lnk10').click();
-    await page.waitForLoadState('load');
-
-    await frame.locator('#mmlink0').click();
-    await page.waitForLoadState('load');
-
-    await frame.locator('#ctl11_btnVolver').click();
-    await page.waitForLoadState('load');
 
     const visador = process.env.visador;
 
@@ -330,6 +404,55 @@ const apruebaOrdenCompra = async (pedido) => {
 
 
 
+}
+
+async function leerTodosLosCorreosConPaginacion(page) {
+    const iframeLocator = page.frameLocator('iframe.k-content-frame');
+    let todosLosCorreos = [];
+    let haySiguientePagina = true;
+
+    while (haySiguientePagina) {
+        // 1. Esperar a que carguen los elementos de la tabla en la página actual
+        // Ajusta este selector según las celdas o elementos que contengan los correos en tu tabla
+        await iframeLocator.locator('table tr').first().waitFor();
+
+        // 2. Extraer el texto de todas las celdas o filas de la página actual
+        const celdas = await iframeLocator.locator('td').allTextContents();
+
+
+        // Filtrar los textos que tengan formato de correo (que incluyan '@' y '.')
+        const correosPagina = celdas.filter(texto => texto.includes('@') && texto.includes('.'));
+        todosLosCorreos.push(...correosPagina);
+
+        // 3. Buscar el botón de "Siguiente página" en el paginador
+        // (Nota: Ajusta el selector 'a.siguiente', 'a.k-pager-nav', o el icono que use tu paginador)
+        const botonSiguiente = iframeLocator.locator('a.k-pager-nav:not(.k-state-disabled) [class*="i-arrow-end-right"], a:has-text(">");');
+
+        // Comprobar si el botón "Siguiente" existe y está habilitado
+        // O una forma más genérica buscando el elemento de paginación activo/siguiente:
+        const siguienteHabilitado = await iframeLocator.locator('.k-pager-wrap .k-i-arrow-end-right, .k-pager-wrap a[title="Go to the next page"]').isVisible().catch(() => false);
+
+        if (siguienteHabilitado) {
+            // Hacer clic en siguiente
+            await iframeLocator.locator('.k-pager-wrap .k-i-arrow-end-right, .k-pager-wrap a[title="Go to the next page"]').click();
+            // Esperar un momento a que cargue la nueva página de la tabla (puedes ajustar el tiempo o esperar una respuesta de red)
+            await page.waitForTimeout(1000);
+        } else {
+            // Si ya no hay botón siguiente o está deshabilitado, terminamos
+            haySiguientePagina = false;
+        }
+    }
+
+    // Expresión regular estándar para detectar correos electrónicos
+    const regexEmail = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+    // 1. Extraer todos los correos que coincidan en el array
+    const todosLosCorreosLimpios = todosLosCorreos.flatMap(item => item.match(regexEmail) || []);
+
+    // 2. Eliminar duplicados usando Set y convertir de nuevo a array
+    const correosUnicos = [...new Set(todosLosCorreosLimpios)];
+
+    return correosUnicos;
 }
 
 const getNroOc = async (pedido) => {
