@@ -175,19 +175,62 @@ const procesaData = async (nroPedido) => {
 
 }
 
-//npx playwright codegen https://ejemplo.com
+// //npx playwright codegen https://ejemplo.com
+// async function loginFin700() {
+//     // Implement the login logic here
+
+//     const uidInput = page.locator('#ctl02_TxtIdPersona');
+//     await uidInput.fill(uidfin700);
+//     const pwdInput = page.locator('#ctl02_TxtClave');
+//     await pwdInput.fill(pwdfin700);
+
+//     const botonSubmit = page.locator('#func0');
+//     await botonSubmit.click();
+
+// }
+
 async function loginFin700() {
     // Implement the login logic here
+    try {
+        const uidfin700 = process.env.uidfin700;
+        const pwdfin700 = process.env.pwdfin700;
 
-    const uidInput = page.locator('#ctl02_TxtIdPersona');
-    await uidInput.fill(uidfin700);
-    const pwdInput = page.locator('#ctl02_TxtClave');
-    await pwdInput.fill(pwdfin700);
+        const uidInput = page.locator('#ctl02_TxtIdPersona');
+        await uidInput.fill(uidfin700);
+        const pwdInput = page.locator('#ctl02_TxtClave');
+        await pwdInput.fill(pwdfin700);
 
-    const botonSubmit = page.locator('#func0');
-    await botonSubmit.click();
+        const botonSubmit = page.locator('#func0');
+        await botonSubmit.click();
+        await page.waitForLoadState('load');
 
+        // controla limite de invocaciones
+        const btnClosePopupSelector = '#btnClosePopup';
+        const btnClosePopup = await page.$(btnClosePopupSelector);
+        if (btnClosePopup) {
+            await btnClosePopup.click();
+            console.log("limite de invocaciones alcanzado, esperando 30 segundos antes de continuar");
+            await page.waitForTimeout(30000); // esperar 3 segundos
+            throw new Error("Popup cerrado limite de invocaciones alcanzado");
+        }
+
+        // controla ventana emergente tareas workflow
+        await page.waitForTimeout(3000); // esperar 3 segundos
+        //*[@id="iframe_emergente_contenedor"]/span
+        const btnCerrarSelector = '#iframe_emergente_contenedor > span';
+        const emergente = await page.$(btnCerrarSelector);
+        if (emergente) {
+            await emergente.click();
+        }
+
+    } catch (error) {
+        console.error("Error during login:", error);
+        throw error;
+    }
 }
+
+
+
 
 async function navegaMenus() {
     // Implement the navigation logic here

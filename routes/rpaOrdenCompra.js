@@ -7,6 +7,8 @@ var sequelizeFin700 = require("../models/sequelizeFin700");
 const { get } = require("selenium-webdriver/http");
 // const showLog = require("../middleware/showLog");
 const rpaPedidos = require("../models/rpaPedidos");
+const rpaOC = require("../models/rpaOC");
+const { Op } = require("sequelize");
 // const { chromium } = require('playwright');
 // require("dotenv").config({ path: "variables.env" });
 
@@ -36,9 +38,9 @@ router.options("*", async function (req, res) {
 
 
 // Validador de pedidos
-const INTERVALO_SEGUNDOS = 1;
+const INTERVALO_SEGUNDOS = 10;
 setInterval(async () => {
-    //await GenerarOrdenCompra();
+    //    await GenerarOrdenCompra();
     await aprobarOrdenCompra();
 }, INTERVALO_SEGUNDOS * 1000);
 
@@ -69,26 +71,54 @@ const aprobarOrdenCompra = async () => {
     aprobandoOrdenCompra = true;
     try {
         let NumSolicitud;
-        const sql = `select NumSolicitud, OcCabId 
+        const sql = `select rtrim(NumSolicitud) as NumSolicitud, 
+                            OcCabId, 
+                            isnull(rtrim(AdqOwner), '') as AdqOwner 
                        from adqt_occab 
                       where usuarioProceso = '${process.env.uidfin700}' 
                         and ConEstCod=1
                       order by OcCabId`;
         const result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
         if (result.length > 0) {
+            const adqOwner = result[0].AdqOwner;
             NumSolicitud = result[0].NumSolicitud;
-            const sql = `SELECT top 1 * FROM rpaPedidos 
+            const OcCabId = result[0].OcCabId;
+
+            await controlaAdqOwner(NumSolicitud, OcCabId, adqOwner);
+            if (adqOwner === '') {
+                NumSolicitud = result[0].NumSolicitud;
+                const sql = `SELECT top 1 * FROM rpaPedidos 
                           WHERE NroPedido = ${NumSolicitud}`;
-            const pendientes = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
-            for (const pedido of pendientes) {
-                console.log(`Iniciando aprobación de orden de compra para pedido ID: ${pedido.id}`);
-                await encolaAprobacionOrden(pedido);
+                const pendientes = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
+                for (const pedido of pendientes) {
+                    console.log(`Iniciando aprobación de orden de compra para pedido ID: ${pedido.id}`);
+                    await encolaAprobacionOrden(pedido);
+                }
             }
         }
     } catch (error) {
         console.error("Error aprobando orden de compra:", error);
     } finally {
         aprobandoOrdenCompra = false;
+    }
+}
+
+const controlaAdqOwner = async (NumSolicitud, OcCabId, adqOwner) => {
+    if (adqOwner === '') {
+        await rpaOC.destroy({
+            where: { NroOc: OcCabId, mensaje: { [Op.like]: '%Error Rpa #1%' } }
+        });
+    } else {
+        // si no existe que cree el error en rpaOC
+        // antes del create, se podría verificar si ya existe un error similar
+        const existingError = await rpaOC.findOne({
+            where: { NroOc: OcCabId, mensaje: { [Op.like]: '%Error Rpa #1%' } }
+        });
+        if (existingError) return;
+        await rpaOC.create({
+            NroOc: OcCabId,
+            mensaje: `Documento ${OcCabId} está siendo usado por otro usuario (Error Rpa #1)`
+        });
     }
 }
 
@@ -167,6 +197,26 @@ async function loginFin700() {
         const botonSubmit = page.locator('#func0');
         await botonSubmit.click();
         await page.waitForLoadState('load');
+
+        // controla limite de invocaciones
+        const btnClosePopupSelector = '#btnClosePopup';
+        const btnClosePopup = await page.$(btnClosePopupSelector);
+        if (btnClosePopup) {
+            await btnClosePopup.click();
+            console.log("limite de invocaciones alcanzado, esperando 30 segundos antes de continuar");
+            await page.waitForTimeout(30000); // esperar 3 segundos
+            throw new Error("Popup cerrado limite de invocaciones alcanzado");
+        }
+
+        // controla ventana emergente tareas workflow
+        await page.waitForTimeout(3000); // esperar 3 segundos
+        //*[@id="iframe_emergente_contenedor"]/span
+        const btnCerrarSelector = '#iframe_emergente_contenedor > span';
+        const emergente = await page.$(btnCerrarSelector);
+        if (emergente) {
+            await emergente.click();
+        }
+
     } catch (error) {
         console.error("Error during login:", error);
         throw error;
@@ -287,7 +337,22 @@ const apruebaOrdenCompra = async (pedido) => {
     // Verificamos si el popup / botón existe antes de hacer clic para evitar errores
     const popupCerrar = await page.$(btnCerrarSelector);
     if (popupCerrar) {
+        console.log(`Documento ${nroOc} está siendo usado por otro usuario`);
+        const existingError = await rpaOC.findOne({
+            where: { NroOc: nroOc, mensaje: { [Op.like]: '%Error Rpa #1%' } }
+        });
+        if (!existingError) {
+            await rpaOC.create({
+                NroOc: nroOc,
+                mensaje: `Documento ${nroOc} está siendo usado por otro usuario (Error Rpa #1)`
+            });
+        }
         await popupCerrar.click();
+        return; // Salir de la función para evitar continuar con el flujo normal
+    } else {
+        await rpaOC.destroy({
+            where: { NroOc: nroOc, mensaje: { [Op.like]: '%Error Rpa #1%' } }
+        });
     }
 
 
@@ -381,10 +446,10 @@ const apruebaOrdenCompra = async (pedido) => {
     await page.waitForLoadState('load');
 
 
-    const btnGuardar = modalFrame.locator('//*[@id="ctl11_btnGuardar"]');
-    await btnGuardar.waitFor({ state: 'visible', timeout: 10000 });
-    await btnGuardar.click();
-    await page.waitForLoadState('load');
+    // const btnGuardar = modalFrame.locator('//*[@id="ctl11_btnGuardar"]');
+    // await btnGuardar.waitFor({ state: 'visible', timeout: 10000 });
+    // await btnGuardar.click();
+    // await page.waitForLoadState('load');
 
     // 2. Ubicar el botón "Volver" dentro de ese iframe
     const btnVolver = modalFrame.locator('#ctl11_btnVolver');
@@ -413,6 +478,8 @@ const apruebaOrdenCompra = async (pedido) => {
 
     await frame.locator('#btn1').click();
     await page.waitForLoadState('load');
+
+    console.log('¡Visador seleccionado con éxito!');
 
 
 
