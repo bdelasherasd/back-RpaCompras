@@ -40,7 +40,8 @@ router.options("*", async function (req, res) {
 // Validador de pedidos
 const INTERVALO_SEGUNDOS = 10;
 setInterval(async () => {
-    //    await GenerarOrdenCompra();
+    await GenerarOrdenCompra();
+    await new Promise(resolve => setTimeout(resolve, 3000)); // esperar 3 segundos
     await aprobarOrdenCompra();
 }, INTERVALO_SEGUNDOS * 1000);
 
@@ -64,11 +65,10 @@ const GenerarOrdenCompra = async () => {
     }
 }
 
-let aprobandoOrdenCompra = false;
 
 const aprobarOrdenCompra = async () => {
-    if (aprobandoOrdenCompra) return;
-    aprobandoOrdenCompra = true;
+    if (generandoOrdenCompra) return;
+    generandoOrdenCompra = true;
     try {
         let NumSolicitud;
         const sql = `select rtrim(NumSolicitud) as NumSolicitud, 
@@ -99,7 +99,7 @@ const aprobarOrdenCompra = async () => {
     } catch (error) {
         console.error("Error aprobando orden de compra:", error);
     } finally {
-        aprobandoOrdenCompra = false;
+        generandoOrdenCompra = false;
     }
 }
 
@@ -293,6 +293,12 @@ async function generarOrdenCompra(pedido) {
     await page.waitForLoadState('load');
 
     console.log(`Orden de compra generada para pedido ID: ${pedido.id}`);
+
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.waitForLoadState('load');
+    await page.frameLocator('#iframe_body').getByRole('button', { name: 'Volver' }).click();
+    await page.getByRole('link', { name: 'Salir' }).click();
+    await page.frameLocator('#iframe_body').locator('#ctl11_Btnterminar').click();
 }
 
 const apruebaOrdenCompra = async (pedido) => {
@@ -462,25 +468,36 @@ const apruebaOrdenCompra = async (pedido) => {
 
     const visador = process.env.visador;
 
-    await frame.locator('#ctl11_txtNombre').click();
-    await frame.locator('#ctl11_txtNombre').press('ControlOrMeta+a');
-    await frame.locator('#ctl11_txtNombre').fill(visador);
-    await frame.locator('#ctl11_txtNombre').press('Tab');
+    const framePopup = page.frameLocator('iframe.k-content-frame');
 
-    await frame.locator('#ctl11_BtnBuscar').click();
+    await framePopup.locator('#ctl11_txtNombre').click();
+    await framePopup.locator('#ctl11_txtNombre').press('ControlOrMeta+a');
+    await framePopup.locator('#ctl11_txtNombre').fill(visador);
+    await framePopup.locator('#ctl11_txtNombre').press('Tab');
+
+    await framePopup.locator('#ctl11_BtnBuscar').click();
     await page.waitForLoadState('load');
 
-    await frame.locator('#ctl11_TablaPaginada1_rbl_0').click();
+    await page.waitForTimeout(1000);
+    await framePopup.locator('#ctl11_TablaPaginada1_rbl_0').click();
     await page.waitForLoadState('load');
 
-    await frame.locator('#ctl11_btnSeleccionar').click();
+    await page.waitForTimeout(1000);
+    await framePopup.locator('#ctl11_btnSeleccionar').click();
     await page.waitForLoadState('load');
 
-    await frame.locator('#btn1').click();
+    await page.waitForTimeout(1000);
+    const msgboxFrame = page.frameLocator('iframe[src*="msgbox.htm"]');
+    await msgboxFrame.locator('#btn1').click();
     await page.waitForLoadState('load');
+
 
     console.log('¡Visador seleccionado con éxito!');
 
+    await page.waitForTimeout(1000);
+    await page.frameLocator('#iframe_body').locator('#ctl11_BtnVolver').click();
+    await page.getByRole('link', { name: 'Salir' }).click();
+    await page.frameLocator('#iframe_body').locator('#ctl11_Btnterminar').click();
 
 
 }
