@@ -51,6 +51,9 @@ app.use("/rpaPedidos", RpaPedidoRoutes);
 var rpaOrdenCompraRoutes = require("./routes/rpaOrdenCompra");
 app.use("/rpaOrdenCompra", rpaOrdenCompraRoutes);
 
+var cargaCombustiblesRoutes = require("./routes/cargaCombustibles");
+app.use("/cargaCombustibles", cargaCombustiblesRoutes);
+
 app.use(express.static(path.join(__dirname, "../front/dist")));
 
 app.use("/pdfs", express.static(path.join(__dirname, "./pdf")));

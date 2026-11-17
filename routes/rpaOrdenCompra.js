@@ -41,8 +41,8 @@ router.options("*", async function (req, res) {
 const INTERVALO_SEGUNDOS = 10;
 setInterval(async () => {
     await GenerarOrdenCompra();
-    await new Promise(resolve => setTimeout(resolve, 3000)); // esperar 3 segundos
     await aprobarOrdenCompra();
+    // await GenerarOrdenCompraCombustibles();
 }, INTERVALO_SEGUNDOS * 1000);
 
 let generandoOrdenCompra = false;
@@ -71,7 +71,7 @@ const aprobarOrdenCompra = async () => {
     generandoOrdenCompra = true;
     try {
         let NumSolicitud;
-        const sql = `select rtrim(NumSolicitud) as NumSolicitud, 
+        const sql = `select top 1 rtrim(NumSolicitud) as NumSolicitud, 
                             OcCabId, 
                             isnull(rtrim(AdqOwner), '') as AdqOwner 
                        from adqt_occab 
