@@ -763,6 +763,9 @@ const procesarCabeceraCombustible = async (pedido) => {
     await frame2.locator('//*[@id="ctl11_Encargado"]').press('Tab');
     await page.waitForLoadState('load');
 
+    await frame2.locator('//*[@id="ctl11_btnGuardar"]').click();
+    await page.waitForLoadState('load');
+
 
 
 
