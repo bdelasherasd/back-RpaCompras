@@ -8,6 +8,7 @@ const showLog = require("../middleware/showLog");
 const XLSX = require("xlsx");
 const fs = require("fs");
 const { ok } = require("assert");
+const sequelizeFin700 = require("../models/sequelizeFin700");
 
 require("dotenv").config({ path: "variables.env" });
 
@@ -116,6 +117,18 @@ const validaData = async (jsonData2) => {
                 ieReal: row['IE real'],
                 nOC: parseInt(row['N° OC']) || 0
             };
+
+            sql = `SELECT ImpuestoPorc 
+            FROM LogT_Impuestos 
+            WHERE ImpuestoId = ${row['Código IE']}
+              AND FechaVigencia >= getdate()`;
+
+            const impuestoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+            if (!impuestoResult || impuestoResult.length === 0) {
+                errores.push(`No se encontró impuesto solicitud '${row['N° solicitud (ID Forms)'].toString()}' vigente para Código IE ${row['Código IE']}\r\n`);
+            }
+
+
             const existe = await rpaCombustibles.findOne({
                 where: {
                     nSolicitudIdForms: row['N° solicitud (ID Forms)'].toString(),

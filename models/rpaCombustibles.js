@@ -130,8 +130,7 @@ var rpaCombustibles = sequelize.define("rpaCombustibles", {
   nOC: {
     type: DataTypes.INTEGER,
     field: 'nroOc',
-    allowNull: true,
-    defaultValue: 0
+    allowNull: true
   }
 }, {
   tableName: "rpaCombustibles"

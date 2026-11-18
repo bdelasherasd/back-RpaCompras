@@ -108,7 +108,8 @@ const GenerarOrdenCompraCombustibles = async () => {
     generandoOrdenCompra = true;
     try {
         const sql = `
-            SELECT factura
+            SELECT top 1
+                 factura
                 ,gd
                 ,empresa
                 ,n_empresa
@@ -666,7 +667,84 @@ const generarOrdenCompraCombustibles = async (pedido) => {
 
 }
 
-const procesarCabeceraCombustible = (pedido) => { third }
+const procesarCabeceraCombustible = async (pedido) => {
+    await modificaImpuestoEspecifico(pedido);
+
+    await page.getByText('Transacciones').click({ timeout: 20000 });
+    await page.locator('//*[@id="k_panelbar"]/li[2]/ul/li[2]/span/span[1]').click();
+    await page.getByText('Administración de Compra').click({ timeout: 5000 });
+
+    await page.locator('//*[@id="k_panelbar"]/li[2]/ul/li[2]/ul/li[3]/ul/li[1]/a').click();
+
+    await page.waitForLoadState('load');
+
+    // #iframe_body
+    let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
+
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').click();
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('ControlOrMeta+a');
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').fill(`${pedido.n_empresa}`);
+    await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('Tab');
+
+    await frame.locator('#ctl11_btnNuevo').click();
+    await page.waitForLoadState('load');
+
+    const frame2 = page.frameLocator('#iframe_body');
+
+    await frame2.locator('//*[@id="ctl11_OptCargoDirecto_1"]').click();
+    await page.waitForLoadState('load');
+
+    await frame2.locator('//*[@id="ctl11_TipoOpeDes_TipoOpeDes_texto"]').click();
+    await frame2.locator('//*[@id="ctl11_TipoOpeDes_TipoOpeDes_texto"]').press('ControlOrMeta+a');
+    await frame2.locator('//*[@id="ctl11_TipoOpeDes_TipoOpeDes_texto"]').fill(`47`);
+    await frame2.locator('//*[@id="ctl11_TipoOpeDes_TipoOpeDes_texto"]').press('Tab');
+    await page.waitForLoadState('load');
+
+
+
+
+
+
+
+
+
+
+    console.log('Procesando cabecera de combustible para pedido:', pedido.n_solicitud_id_forms);
+
+
+}
+
+const modificaImpuestoEspecifico = async (pedido) => {
+    await page.getByText('Configuración Fin700').click({ timeout: 20000 });
+    await page.getByText('Parámetros de Adquisiciones').click({ timeout: 20000 });
+    await page.click('a[href*="FUN=ADQADMIMPUESTO"]');
+
+
+    const frame = page.frameLocator('#iframe_body');
+    await frame.locator('#ctl11_xImpuestoId').click();
+    await frame.locator('#ctl11_xImpuestoId').press('ControlOrMeta+a');
+    await frame.locator('#ctl11_xImpuestoId').fill(`${pedido.codigo_ie}`);
+    await frame.locator('#ctl11_xImpuestoId').press('Tab');
+
+    await frame.locator('#ctl11_btnBuscar').click();
+    await page.waitForTimeout(2000);
+
+    await frame.locator('#ctl11_tblImpuestos > tbody > tr.DataGridItem > td:nth-child(1) > a').click();
+    await page.waitForTimeout(2000);
+
+    await frame.locator('#ctl11_ImpuestoPorc').click();
+    await frame.locator('#ctl11_ImpuestoPorc').press('ControlOrMeta+a');
+
+    if (pedido.ie_real > 0) {
+        await frame.locator('#ctl11_ImpuestoPorc').fill(`${pedido.ie_real}`);
+    } else {
+        await frame.locator('#ctl11_ImpuestoPorc').fill('0,0001');
+    }
+    await frame.locator('#ctl11_ImpuestoPorc').press('Tab');
+    await frame.locator('#ctl11_btnGrabar').click();
+
+
+}
 
 const procesarDetalleCombustible = (detalle) => { third }
 
