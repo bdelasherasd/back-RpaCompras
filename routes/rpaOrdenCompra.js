@@ -146,7 +146,7 @@ const GenerarOrdenCompraCombustibles = async () => {
         `;
         const pendientes = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
         for (const pedido of pendientes) {
-            console.log(`Iniciando generación de orden de compra para pedido ID: ${pedido.id}`);
+            console.log(`Iniciando generación de orden de compra para pedido ID: ${pedido.n_solicitud_id_forms}`);
             await encolaProcesoOrdenCombustibles(pedido);
         }
 
