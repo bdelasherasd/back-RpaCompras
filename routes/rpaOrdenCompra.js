@@ -701,7 +701,22 @@ const procesarCabeceraCombustible = async (pedido) => {
     await page.waitForLoadState('load');
 
 
+    if (pedido.fecha_proceso != '') {
+        await frame2.locator('//*[@id="ctl11_FechaProceso"]').click();
+        await frame2.locator('//*[@id="ctl11_FechaProceso"]').press('ControlOrMeta+a');
+        await frame2.locator('//*[@id="ctl11_FechaProceso"]').fill(`${pedido.fecha_proceso}`);
+        await frame2.locator('//*[@id="ctl11_FechaProceso"]').press('Tab');
+        await page.waitForLoadState('load');
+    }
 
+    await frame2.locator('//*[@id="ctl11_EntRut"]').click();
+    await frame2.locator('//*[@id="ctl11_EntRut"]').press('ControlOrMeta+a');
+    await frame2.locator('//*[@id="ctl11_EntRut"]').fill(`${pedido.rut_proveedor}`);
+    await frame2.locator('//*[@id="ctl11_EntRut"]').press('Tab');
+    await page.waitForLoadState('load');
+
+    await frame2.locator('//*[@id="ctl11_hylContactos"]/img').click();
+    await page.waitForLoadState('load');
 
 
 
