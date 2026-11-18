@@ -42,7 +42,7 @@ const INTERVALO_SEGUNDOS = 10;
 setInterval(async () => {
     await GenerarOrdenCompra();
     await aprobarOrdenCompra();
-    // await GenerarOrdenCompraCombustibles();
+    await GenerarOrdenCompraCombustibles();
 }, INTERVALO_SEGUNDOS * 1000);
 
 let generandoOrdenCompra = false;
@@ -102,6 +102,62 @@ const aprobarOrdenCompra = async () => {
         generandoOrdenCompra = false;
     }
 }
+
+const GenerarOrdenCompraCombustibles = async () => {
+    if (generandoOrdenCompra) return;
+    generandoOrdenCompra = true;
+    try {
+        const sql = `
+            SELECT factura
+                ,gd
+                ,empresa
+                ,n_empresa
+                ,fecha_proceso
+                ,rut_proveedor
+                ,contacto
+                ,n_solicitud_id_forms
+                ,solicitante
+                ,forma_pago
+                ,tipo_proyecto
+                ,n_proyecto
+                ,tipo_documento
+                ,numero_documento
+                ,codigo_ie
+                ,ie_real
+            FROM rpaCombustibles
+            WHERE nroOc=0
+            group by 
+                factura
+                ,gd
+                ,empresa
+                ,n_empresa
+                ,fecha_proceso
+                ,rut_proveedor
+                ,contacto
+                ,n_solicitud_id_forms
+                ,solicitante
+                ,forma_pago
+                ,tipo_proyecto
+                ,n_proyecto
+                ,tipo_documento
+                ,numero_documento
+                ,codigo_ie
+                ,ie_real
+        `;
+        const pendientes = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
+        for (const pedido of pendientes) {
+            console.log(`Iniciando generación de orden de compra para pedido ID: ${pedido.id}`);
+            await encolaProcesoOrdenCombustibles(pedido);
+        }
+
+    } catch (error) {
+        console.error("Error generando orden de compra:", error);
+    } finally {
+        generandoOrdenCompra = false;
+    }
+}
+
+
 
 const controlaAdqOwner = async (NumSolicitud, OcCabId, adqOwner) => {
     if (adqOwner === '') {
@@ -169,6 +225,29 @@ const encolaAprobacionOrden = async (pedido) => {
         page = null;
     }
 }
+
+const encolaProcesoOrdenCombustibles = async (pedido) => {
+    const urlfin700 = process.env.urlfin700;
+    try {
+        browser = await chromium.launch({ headless: false });
+        page = await browser.newPage();
+
+        await page.goto(urlfin700, { timeout: 20000 });
+
+        await loginFin700();
+        console.log("Login successful");
+        await generarOrdenCompraCombustibles(pedido);
+    } catch (error) {
+        console.error(`Error procesando orden de compra para pedido ID: ${pedido.n_solicitud_id_forms}`, error);
+    } finally {
+        if (browser) {
+            await browser.close();
+        }
+        browser = null;
+        page = null;
+    }
+}
+
 
 const pedidoSinOc = async (pedido) => {
     sql = `select * from adqt_occab where pempid = ${pedido.empId} and NumSolicitud='${pedido.nroPedido}'`;
@@ -568,5 +647,27 @@ const getNroOc = async (pedido) => {
 
     return null; // Return null if no order number is found 
 }
+
+const generarOrdenCompraCombustibles = async (pedido) => {
+
+    // prrocesa cabecera de la orden de compra de combustibles
+    await procesarCabeceraCombustible(pedido); // Llama a una función que procese la cabecera de la orden de compra de combustibles
+
+    const sql = `select *
+        from rpaCombustibles
+        where nroOc = 0
+        and n_solicitud_id_forms = ${pedido.n_solicitud_id_forms}`;
+    let pedidoDetalles = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
+    for (let detalle of pedidoDetalles) {
+        // Aquí puedes procesar cada detalle de la orden de compra de combustibles
+        await procesarDetalleCombustible(detalle); // Llama a una función que procese cada detalle
+        console.log(detalle);
+    }
+
+}
+
+const procesarCabeceraCombustible = (pedido) => { third }
+
+const procesarDetalleCombustible = (detalle) => { third }
 
 module.exports = router;

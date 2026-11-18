@@ -114,7 +114,7 @@ const validaData = async (jsonData2) => {
                 precioUnitarioNeto: row['Precio unitario neto'],
                 codigoIE: row['Código IE'],
                 ieReal: row['IE real'],
-                nOC: row['N° OC']
+                nOC: parseInt(row['N° OC']) || 0
             };
             const existe = await rpaCombustibles.findOne({
                 where: {
@@ -169,7 +169,7 @@ const cargaData = async (jsonData2) => {
                 precioUnitarioNeto: row['Precio unitario neto ($/L)'],
                 codigoIE: row['Código IE'],
                 ieReal: row['% IE real'],
-                nOC: row['N° OC']
+                nOC: parseInt(row['N° OC']) || 0
             };
             await rpaCombustibles.create(rpaCombustiblesData);
 
