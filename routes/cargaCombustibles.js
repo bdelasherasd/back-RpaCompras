@@ -101,7 +101,7 @@ const validaData = async (jsonData2) => {
                 rutProveedor: row['RUT proveedor'],
                 contacto: row['Contacto'],
                 glosa: row['Glosa'],
-                nSolicitudIdForms: row['N° solicitud (ID Forms)'],
+                nSolicitudIdForms: row['N° solicitud (ID Forms)'].toString(),
                 solicitante: row['Solicitante'],
                 aprobador: row['Aprobador'],
                 formaPago: row['Forma pago'],
@@ -118,11 +118,11 @@ const validaData = async (jsonData2) => {
             };
             const existe = await rpaCombustibles.findOne({
                 where: {
-                    nSolicitudIdForms: row['N° solicitud (ID Forms)'],
+                    nSolicitudIdForms: row['N° solicitud (ID Forms)'].toString(),
                 },
             });
             if (existe) {
-                errores.push(`La solicitud ID Forms ${row['N° solicitud (ID Forms)']} ya existe`);
+                errores.push(`La solicitud ID Forms ${row['N° solicitud (ID Forms)'].toString()} ya existe`);
             }
         } catch (error) {
             console.error("Error al guardar los datos en la base de datos:", error);
@@ -155,7 +155,7 @@ const cargaData = async (jsonData2) => {
                 rutProveedor: row['RUT proveedor'],
                 contacto: row['Contacto'],
                 glosa: row['Glosa'],
-                nSolicitudIdForms: row['N° solicitud (ID Forms)'],
+                nSolicitudIdForms: row['N° solicitud (ID Forms)'].toString(),
                 solicitante: row['Solicitante'],
                 aprobador: row['Aprobador'],
                 formaPago: row['Forma Pago\r\n(Numero de cod)'],
