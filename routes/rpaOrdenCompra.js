@@ -670,6 +670,7 @@ const generarOrdenCompraCombustibles = async (pedido) => {
 const procesarCabeceraCombustible = async (pedido) => {
     await modificaImpuestoEspecifico(pedido);
 
+
     await page.getByText('Transacciones').click({ timeout: 20000 });
     await page.locator('//*[@id="k_panelbar"]/li[2]/ul/li[2]/span/span[1]').click();
     await page.getByText('Administración de Compra').click({ timeout: 5000 });
@@ -718,7 +719,60 @@ const procesarCabeceraCombustible = async (pedido) => {
     await frame2.locator('//*[@id="ctl11_hylContactos"]/img').click();
     await page.waitForLoadState('load');
 
+    const nombrecontacto = pedido.contacto;
 
+    // Apuntar al iframe del popup de contactos
+    const popupFrame = page.frameLocator('iframe[src*="ucAdqComprasContactos"]');
+
+    // Hacer clic en el texto que coincida con la variable (sin importar mayúsculas/minúsculas o espacios extra)
+    await popupFrame.getByText(nombrecontacto, { exact: false }).first().click();
+    await page.waitForLoadState('load');
+
+    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').click();
+    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('ControlOrMeta+a');
+    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').fill(`${pedido.centro_consumo}`);
+    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('Tab');
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_AdqGlosa"]
+    await frame2.locator('//*[@id="ctl11_AdqGlosa"]').click();
+    await frame2.locator('//*[@id="ctl11_AdqGlosa"]').press('ControlOrMeta+a');
+    await frame2.locator('//*[@id="ctl11_AdqGlosa"]').fill(`${pedido.glosa}`);
+    await frame2.locator('//*[@id="ctl11_AdqGlosa"]').press('Tab');
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_NumSolicitud"]
+    await frame2.locator('//*[@id="ctl11_NumSolicitud"]').click();
+    await frame2.locator('//*[@id="ctl11_NumSolicitud"]').press('ControlOrMeta+a');
+    await frame2.locator('//*[@id="ctl11_NumSolicitud"]').fill(`${pedido.n_solicitud_id_forms}`);
+    await frame2.locator('//*[@id="ctl11_NumSolicitud"]').press('Tab');
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_NombreSolicitante"]
+    await frame2.locator('//*[@id="ctl11_NombreSolicitante"]').click();
+    await frame2.locator('//*[@id="ctl11_NombreSolicitante"]').press('ControlOrMeta+a');
+    await frame2.locator('//*[@id="ctl11_NombreSolicitante"]').fill(`${pedido.solicitante}`);
+    await frame2.locator('//*[@id="ctl11_NombreSolicitante"]').press('Tab');
+    await page.waitForLoadState('load');
+
+
+    //*[@id="ctl11_Encargado"]
+    await frame2.locator('//*[@id="ctl11_Encargado"]').click();
+    await frame2.locator('//*[@id="ctl11_Encargado"]').press('ControlOrMeta+a');
+    await frame2.locator('//*[@id="ctl11_Encargado"]').fill(`${pedido.aprobador}`);
+    await frame2.locator('//*[@id="ctl11_Encargado"]').press('Tab');
+    await page.waitForLoadState('load');
+
+
+
+
+
+
+    if (pedido.ie_real > 0) {
+        await procesaPosisitivo(pedido);
+    } else {
+        await procesaNegativo(pedido);
+    }
 
 
 
