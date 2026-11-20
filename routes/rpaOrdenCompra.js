@@ -7,6 +7,7 @@ var sequelizeFin700 = require("../models/sequelizeFin700");
 const { get } = require("selenium-webdriver/http");
 // const showLog = require("../middleware/showLog");
 const rpaPedidos = require("../models/rpaPedidos");
+const rpaCombustibles = require("../models/rpaCombustibles");
 const rpaOC = require("../models/rpaOC");
 const { Op } = require("sequelize");
 // const { chromium } = require('playwright');
@@ -33,8 +34,8 @@ router.options("*", async function (req, res) {
     res.send();
 });
 
-//let browser = null;
-//let page = null;
+let browser = null;
+let page = null;
 
 
 // Validador de pedidos
@@ -476,6 +477,8 @@ const apruebaOrdenCompra = async (pedido) => {
 
 
 
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(1000);
 
     //--------------------------------------------------------------------------
     // 1. Apuntar directamente al iframe donde opera tu formulario
@@ -686,6 +689,8 @@ const procesarCabeceraCombustible = async (pedido) => {
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('ControlOrMeta+a');
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').fill(`${pedido.n_empresa}`);
     await frame.locator('#ctl11_EntRazonSocial_EntRazonSocial_texto').press('Tab');
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(2000);
 
     await frame.locator('#ctl11_btnNuevo').click();
     await page.waitForLoadState('load');
@@ -725,19 +730,46 @@ const procesarCabeceraCombustible = async (pedido) => {
     const popupFrame = page.frameLocator('iframe[src*="ucAdqComprasContactos"]');
 
     // Hacer clic en el texto que coincida con la variable (sin importar mayúsculas/minúsculas o espacios extra)
-    await popupFrame.getByText(nombrecontacto, { exact: false }).first().click();
+    //await popupFrame.getByText(nombrecontacto, { exact: false }).first().click();
+
+    const fila = popupFrame
+        .locator('tr.DataGridItem, tr.DataGridAlternatingItem')
+        .filter({ hasText: new RegExp(nombrecontacto, 'i') })
+        .first();
+
+    await fila.waitFor({ state: 'visible' });
+
+    // Hacer clic en el selector (enlace con img seleccion.gif) de esa fila
+    const selectorLink = fila.locator('a.HyperLink').first();
+    await selectorLink.click();
+
+
+
+    //*[@id="ctl11_TabContactos"]
+    //const enlaceContacto = popupFrame.locator(`//*[@id="ctl11_TabContactos"]/tbody/tr[.//*[contains(text(), "${nombrecontacto}")]]/td[1]/a`);
+    //await enlaceContacto.click();
+
+
     await page.waitForLoadState('load');
 
-    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').click();
-    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('ControlOrMeta+a');
-    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').fill(`${pedido.centro_consumo}`);
-    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('Tab');
-    await page.waitForLoadState('load');
+    // await frame2.locator('//*[@id="ctl11_CConsumoCod"]').click();
+    // await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('ControlOrMeta+a');
+    // await frame2.locator('//*[@id="ctl11_CConsumoCod"]').fill(`${pedido.centro_consumo}`);
+    // await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('Tab');
+    // await page.waitForLoadState('load');
+
+    if (pedido.ie_real < 0) {
+        //*[@id="ctl11_ChkHonorarios"]
+        await frame2.locator('//*[@id="ctl11_ChkHonorarios"]').check();
+        await page.waitForLoadState('load');
+    }
+
+    const allGlosas = await getGlosas(pedido);
 
     //*[@id="ctl11_AdqGlosa"]
     await frame2.locator('//*[@id="ctl11_AdqGlosa"]').click();
     await frame2.locator('//*[@id="ctl11_AdqGlosa"]').press('ControlOrMeta+a');
-    await frame2.locator('//*[@id="ctl11_AdqGlosa"]').fill(`${pedido.glosa}`);
+    await frame2.locator('//*[@id="ctl11_AdqGlosa"]').fill(`${allGlosas}`);
     await frame2.locator('//*[@id="ctl11_AdqGlosa"]').press('Tab');
     await page.waitForLoadState('load');
 
@@ -766,23 +798,126 @@ const procesarCabeceraCombustible = async (pedido) => {
     await frame2.locator('//*[@id="ctl11_btnGuardar"]').click();
     await page.waitForLoadState('load');
 
+    const modalFrame = page.frameLocator('.k-window .k-content-frame').first();
+
+    // 2. Localizar el input dentro de ese frame
+    const formaPagoInput = modalFrame.locator('#ctl11_FormaPagoGlosa_FormaPagoGlosa_texto');
+    await formaPagoInput.waitFor({ state: 'visible' });
+    await formaPagoInput.click();
+    await formaPagoInput.press('ControlOrMeta+a');
+    await formaPagoInput.fill(`${pedido.forma_pago}`);
+    await formaPagoInput.press('Tab');
+    await page.waitForLoadState('load');
+
+    const monedaCompra = modalFrame.locator('//*[@id="ctl11_MonGlosa_MonGlosa_texto"]');
+    await monedaCompra.waitFor({ state: 'visible' });
+    await monedaCompra.click();
+    await monedaCompra.press('ControlOrMeta+a');
+    await monedaCompra.fill('1');
+    await monedaCompra.press('Tab');
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_BtnGuardar"]
+    const btnGuardar = modalFrame.locator('//*[@id="ctl11_BtnGuardar"]');
+    await btnGuardar.waitFor({ state: 'visible' });
+    await btnGuardar.click();
+    await page.waitForLoadState('load');
+
+    const closeButton = page.locator('.k-window .k-window-action[aria-label="Close"]').first();
+    await closeButton.waitFor({ state: 'visible' });
+    await closeButton.click();
+    await page.waitForLoadState('load');
+
+    const ocCabIdInput = frame.locator('//*[@id="ctl11_OcCabId"]');
+    await ocCabIdInput.waitFor({ state: 'attached' });
+    const numeroOc = await ocCabIdInput.inputValue();
+
+    await rpaCombustibles.update({ nOC: numeroOc }, { where: { n_solicitud_id_forms: pedido.n_solicitud_id_forms } });
 
 
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(1000);
+    await menuOtros();
+    await page.waitForTimeout(3000);
+
+    const otrosFrame = page.frameLocator('iframe.k-content-frame[src*="ucAdqComprasOtros"]');
+
+    const pTprIdInput = otrosFrame.locator('//*[@id="ctl11_pTprId"]');
+    await pTprIdInput.waitFor({ state: 'visible' });
+    await pTprIdInput.click();
+    await pTprIdInput.press('ControlOrMeta+a');
+    await pTprIdInput.fill(`${pedido.tipo_proyecto}`);
+    await pTprIdInput.press('Tab');
+    await page.waitForLoadState('load');
+
+    const pryectoNumeroInput = otrosFrame.locator('//*[@id="ctl11_PryNumero"]');
+    await pryectoNumeroInput.waitFor({ state: 'visible' });
+    await pryectoNumeroInput.click();
+    await pryectoNumeroInput.press('ControlOrMeta+a');
+    await pryectoNumeroInput.fill(`${pedido.n_proyecto}`);
+    await pryectoNumeroInput.press('Tab');
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_TdoGlosa_TdoGlosa_texto"]
+    const tdoGlosaInput = otrosFrame.locator('//*[@id="ctl11_TdoGlosa_TdoGlosa_texto"]');
+    await tdoGlosaInput.waitFor({ state: 'visible' });
+    await tdoGlosaInput.click();
+    await tdoGlosaInput.press('ControlOrMeta+a');
+    await tdoGlosaInput.fill(`${pedido.tipo_documento}`);
+    await tdoGlosaInput.press('Tab');
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_NumeroDocumento"]
+    const numeroDocumentoInput = otrosFrame.locator('//*[@id="ctl11_NumeroDocumento"]');
+    await numeroDocumentoInput.waitFor({ state: 'visible' });
+    await numeroDocumentoInput.click();
+    await numeroDocumentoInput.press('ControlOrMeta+a');
+    await numeroDocumentoInput.fill(`${pedido.numero_documento}`);
+    await numeroDocumentoInput.press('Tab');
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_FechaDocumento"]
+    const fechafragmentada = pedido.fecha_proceso.split('-');
+    const fechaDocumento = `${fechafragmentada[2]}/${fechafragmentada[1]}/${fechafragmentada[0]}`;
+
+    const fechaDocumentoInput = otrosFrame.locator('//*[@id="ctl11_FechaDocumento"]');
+    await fechaDocumentoInput.waitFor({ state: 'visible' });
+    await fechaDocumentoInput.click();
+    await fechaDocumentoInput.press('ControlOrMeta+a');
+    await fechaDocumentoInput.fill(`${fechaDocumento}`);
+    await fechaDocumentoInput.press('Tab');
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_btnGuardar"]
+    const btnGuardar2 = otrosFrame.locator('//*[@id="ctl11_btnGuardar"]');
+    await btnGuardar2.waitFor({ state: 'visible' });
+    await btnGuardar2.click();
+    await page.waitForLoadState('load');
+
+    //*[@id="ctl11_btnVolver"]
+    const btnVolver = otrosFrame.locator('//*[@id="ctl11_btnVolver"]');
+    await btnVolver.waitFor({ state: 'visible' });
+    await btnVolver.click();
+    await page.waitForLoadState('load');
+
+    console.log('Cabecera de combustible para pedido:', pedido.n_solicitud_id_forms);
 
 
+}
 
-    if (pedido.ie_real > 0) {
-        await procesaPosisitivo(pedido);
-    } else {
-        await procesaNegativo(pedido);
+const getGlosas = async (pedido) => {
+
+    const detPedido = await rpaCombustibles.findAll({
+        where: {
+            n_solicitud_id_forms: pedido.n_solicitud_id_forms
+        }
+    });
+
+    let glosas = '';
+    if (detPedido && detPedido.length > 0) {
+        glosas = detPedido.map(item => item.glosa).join('\n\r');
     }
-
-
-
-
-
-    console.log('Procesando cabecera de combustible para pedido:', pedido.n_solicitud_id_forms);
-
+    return glosas;
 
 }
 
@@ -817,6 +952,112 @@ const modificaImpuestoEspecifico = async (pedido) => {
 
 
 }
+
+const menuOtros = async () => {
+    // Determina si #lnk10 está en el iframe_body o en page (top)
+    const iframeBody = page.frameLocator('iframe#iframe_body');
+    const scope = (await iframeBody.locator('div#lnk10').count()) > 0 ? iframeBody : page;
+
+    // 1. Ubicar el botón "Opciones" (#lnk10)
+    const menuDiv = scope.locator('div#lnk10');
+    await menuDiv.waitFor({ state: 'visible', timeout: 10000 });
+
+    // 2. Hacer hover para que Milonic posicione y muestre el submenú (#menu0)
+    await menuDiv.hover();
+    await page.waitForTimeout(600);
+
+    // 3. Ubicar específicamente la opción "Otros Conceptos Contables" (#lnk5 / índice 5)
+    const otrosConceptosLink = scope.locator('a#lnk5').or(
+        scope.locator('a[name="mM1"]').filter({ hasText: /Otros Conceptos Contables/i })
+    ).first();
+    // esperar 1 segundo antes de continuar
+    await page.waitForTimeout(1000);
+    await otrosConceptosLink.waitFor({ state: 'attached', timeout: 5000 });
+
+    // 4. Forzar el evento y ejecutar $K(5) (o el _itemRef del enlace flotante)
+    await otrosConceptosLink.evaluate((el) => {
+        const mouseOverEvent = new MouseEvent('mouseover', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+        });
+        el.dispatchEvent(mouseOverEvent);
+
+        const mmlink = document.querySelector('a[id^="mmlink"]');
+        if (mmlink && typeof mmlink.onmouseover === 'function') {
+            mmlink.onmouseover(mouseOverEvent);
+        }
+
+        // En el DOM de "Otros Conceptos Contables", el enlace tiene onclick="return $K(5)"
+        if (typeof window.$K === 'function') {
+            const itemRef = (mmlink && mmlink._itemRef !== undefined) ? mmlink._itemRef : 5;
+            window.$K(itemRef);
+        } else {
+            el.click();
+        }
+    });
+
+    console.log('¡Opción "Otros Conceptos Contables" ejecutada con éxito!');
+};
+
+
+const menuRaro = async (opcion, etiquetaOpcional = '') => {
+    const idx = Number(opcion);
+
+    // Determina si #lnk10 está en el iframe_body o en page (top)
+    const iframeBody = page.frameLocator('iframe#iframe_body');
+    const enIframe = (await iframeBody.locator('div#lnk10').count()) > 0;
+    const scope = enIframe ? iframeBody : page;
+
+    // 1. Ubicar el botón "Opciones" (#lnk10)
+    const menuDiv = scope.locator('div#lnk10');
+    await menuDiv.waitFor({ state: 'visible', timeout: 10000 });
+
+    // 2. Hacer hover para que Milonic posicione y muestre el submenú (#menu0)
+    await menuDiv.hover();
+    await page.waitForTimeout(600);
+
+    // 3. Ubicar la opción por id a#lnk{idx} (y opcionalmente por texto si se entrega)
+    let targetLink = scope.locator(`a#lnk${idx}`);
+    if (etiquetaOpcional) {
+        targetLink = targetLink.or(
+            scope.locator('a[name="mM1"]').filter({ hasText: new RegExp(etiquetaOpcional, 'i') })
+        );
+    }
+    const optionLink = targetLink.first();
+
+    await optionLink.waitFor({ state: 'attached', timeout: 5000 });
+
+    // 4. Forzar el evento y ejecutar $K(idx) (o el _itemRef del enlace flotante si corresponde)
+    await optionLink.evaluate((el, itemIdx) => {
+        const mouseOverEvent = new MouseEvent('mouseover', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+        });
+        el.dispatchEvent(mouseOverEvent);
+
+        const mmlink = document.querySelector('a[id^="mmlink"]');
+        if (mmlink && typeof mmlink.onmouseover === 'function') {
+            mmlink.onmouseover(mouseOverEvent);
+        }
+
+        if (typeof window.$K === 'function') {
+            const itemRef =
+                mmlink && mmlink._itemRef !== undefined && mmlink._itemRef !== null
+                    ? mmlink._itemRef
+                    : itemIdx;
+            window.$K(itemRef);
+        } else {
+            el.click();
+        }
+    }, idx);
+
+    console.log(`¡Opción del menú (${etiquetaOpcional || `lnk${idx}`}) ejecutada con éxito!`);
+};
+
+
+
 
 const procesarDetalleCombustible = (detalle) => { third }
 

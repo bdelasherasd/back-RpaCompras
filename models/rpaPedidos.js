@@ -31,7 +31,7 @@ var rpaPedidos = sequelize.define("rpaPedidos", {
 //sequelize.sync({ alter: true });
 
 try {
-  sequelize.sync({ alter: true });
+  sequelize.sync();
 } catch (error) {
   console.error('Unable to connect to the database:', error);
 }
