@@ -119,6 +119,7 @@ const GenerarOrdenCompraCombustibles = async () => {
                 ,contacto
                 ,n_solicitud_id_forms
                 ,solicitante
+                ,aprobador
                 ,forma_pago
                 ,tipo_proyecto
                 ,n_proyecto
@@ -138,6 +139,7 @@ const GenerarOrdenCompraCombustibles = async () => {
                 ,contacto
                 ,n_solicitud_id_forms
                 ,solicitante
+                ,aprobador
                 ,forma_pago
                 ,tipo_proyecto
                 ,n_proyecto
@@ -548,7 +550,19 @@ const apruebaOrdenCompra = async (pedido) => {
     await btnVolver.click();
     await page.waitForLoadState('load');
 
+    await eligeVisador();
 
+
+    await page.waitForTimeout(1000);
+    await page.frameLocator('#iframe_body').locator('#ctl11_BtnVolver').click();
+    await page.getByRole('link', { name: 'Salir' }).click();
+    await page.frameLocator('#iframe_body').locator('#ctl11_Btnterminar').click();
+
+
+}
+
+const eligeVisador = async () => {
+    await page.waitForTimeout(500);
     const visador = process.env.visador;
 
     const framePopup = page.frameLocator('iframe.k-content-frame');
@@ -576,11 +590,6 @@ const apruebaOrdenCompra = async (pedido) => {
 
 
     console.log('¡Visador seleccionado con éxito!');
-
-    await page.waitForTimeout(1000);
-    await page.frameLocator('#iframe_body').locator('#ctl11_BtnVolver').click();
-    await page.getByRole('link', { name: 'Salir' }).click();
-    await page.frameLocator('#iframe_body').locator('#ctl11_Btnterminar').click();
 
 
 }
@@ -659,14 +668,23 @@ const generarOrdenCompraCombustibles = async (pedido) => {
 
     const sql = `select *
         from rpaCombustibles
-        where nroOc = 0
-        and n_solicitud_id_forms = ${pedido.n_solicitud_id_forms}`;
-    let pedidoDetalles = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });
+        where n_solicitud_id_forms = '${pedido.n_solicitud_id_forms}'`;
+    let pedidoDetalles = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
     for (let detalle of pedidoDetalles) {
         // Aquí puedes procesar cada detalle de la orden de compra de combustibles
         await procesarDetalleCombustible(detalle); // Llama a una función que procese cada detalle
         console.log(detalle);
     }
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(1000);
+    await menuAprobar(); // Llama a la función que aprueba la orden de compra
+    await eligeVisador(); // Llama a la función que selecciona el visador
+
+    await page.waitForTimeout(1000); // Espera un momento después de seleccionar el visador
+
+
+    console.log('Orden de compra de combustibles generada para el pedido:', pedido.n_solicitud_id_forms);
 
 }
 
@@ -723,6 +741,7 @@ const procesarCabeceraCombustible = async (pedido) => {
 
     await frame2.locator('//*[@id="ctl11_hylContactos"]/img').click();
     await page.waitForLoadState('load');
+    await page.waitForTimeout(1000);
 
     const nombrecontacto = pedido.contacto;
 
@@ -751,12 +770,15 @@ const procesarCabeceraCombustible = async (pedido) => {
 
 
     await page.waitForLoadState('load');
+    await page.waitForTimeout(1000);
 
-    // await frame2.locator('//*[@id="ctl11_CConsumoCod"]').click();
-    // await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('ControlOrMeta+a');
-    // await frame2.locator('//*[@id="ctl11_CConsumoCod"]').fill(`${pedido.centro_consumo}`);
-    // await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('Tab');
-    // await page.waitForLoadState('load');
+
+    const centroConsumo = await getPrimerCentroConsumo(pedido);
+    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').click();
+    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('ControlOrMeta+a');
+    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').fill(`${centroConsumo}`);
+    await frame2.locator('//*[@id="ctl11_CConsumoCod"]').press('Tab');
+    await page.waitForLoadState('load');
 
     if (pedido.ie_real < 0) {
         //*[@id="ctl11_ChkHonorarios"]
@@ -921,6 +943,15 @@ const getGlosas = async (pedido) => {
 
 }
 
+const getPrimerCentroConsumo = async (pedido) => {
+    const detPedido = await rpaCombustibles.findOne({
+        where: {
+            n_solicitud_id_forms: pedido.n_solicitud_id_forms
+        }
+    });
+    return detPedido ? detPedido.centroConsumo : '';
+}
+
 const modificaImpuestoEspecifico = async (pedido) => {
     await page.getByText('Configuración Fin700').click({ timeout: 20000 });
     await page.getByText('Parámetros de Adquisiciones').click({ timeout: 20000 });
@@ -1001,6 +1032,55 @@ const menuOtros = async () => {
 };
 
 
+const menuAprobar = async () => {
+    // Determina si #lnk10 está en el iframe_body o en page (top)
+    const iframeBody = page.frameLocator('iframe#iframe_body');
+    const scope = (await iframeBody.locator('div#lnk10').count()) > 0 ? iframeBody : page;
+
+    // 1. Ubicar el botón "Opciones" (#lnk10)
+    const menuDiv = scope.locator('div#lnk10');
+    await menuDiv.waitFor({ state: 'visible', timeout: 10000 });
+
+    // 2. Hacer hover para que Milonic posicione y muestre el submenú (#menu0)
+    await menuDiv.hover();
+    await page.waitForTimeout(600);
+
+    // 3. Ubicar específicamente la opción "Otros Conceptos Contables" (#lnk5 / índice 5)
+    const otrosConceptosLink = scope.locator('a#lnk0').or(
+        scope.locator('a[name="mM1"]').filter({ hasText: /Aprobar/i })
+    ).first();
+    // esperar 1 segundo antes de continuar
+    await page.waitForTimeout(1000);
+    await otrosConceptosLink.waitFor({ state: 'attached', timeout: 5000 });
+
+    // 4. Forzar el evento y ejecutar $K(5) (o el _itemRef del enlace flotante)
+    await otrosConceptosLink.evaluate((el) => {
+        const mouseOverEvent = new MouseEvent('mouseover', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+        });
+        el.dispatchEvent(mouseOverEvent);
+
+        const mmlink = document.querySelector('a[id^="mmlink"]');
+        if (mmlink && typeof mmlink.onmouseover === 'function') {
+            mmlink.onmouseover(mouseOverEvent);
+        }
+
+        // En el DOM de "Otros Conceptos Contables", el enlace tiene onclick="return $K(5)"
+        if (typeof window.$K === 'function') {
+            const itemRef = (mmlink && mmlink._itemRef !== undefined) ? mmlink._itemRef : 5;
+            window.$K(itemRef);
+        } else {
+            el.click();
+        }
+    });
+
+    console.log('¡Opción "Aprobar" ejecutada con éxito!');
+};
+
+
+
 const menuRaro = async (opcion, etiquetaOpcional = '') => {
     const idx = Number(opcion);
 
@@ -1059,6 +1139,68 @@ const menuRaro = async (opcion, etiquetaOpcional = '') => {
 
 
 
-const procesarDetalleCombustible = (detalle) => { third }
+const procesarDetalleCombustible = async (detPedido) => {
+    //*[@id="HylDetalle"]
+    let frame = await page.locator('iframe[name="iframe_body"]').contentFrame();
+
+    await frame.locator('//*[@id="HylDetalle"]').click();
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+
+    frame = page.frameLocator('iframe.k-content-frame[src*="ucAdqComprasDetalle"]');
+
+    await frame.locator('//*[@id="ctl11_CodigoAlternativo"]').click();
+    await frame.locator('//*[@id="ctl11_CodigoAlternativo"]').press('ControlOrMeta+a');
+    await frame.locator('//*[@id="ctl11_CodigoAlternativo"]').fill(`${detPedido.codigo_producto}`);
+    await frame.locator('//*[@id="ctl11_CodigoAlternativo"]').press('Tab');
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+
+    await frame.locator('//*[@id="ctl11_CConsumoCod"]').click();
+    await frame.locator('//*[@id="ctl11_CConsumoCod"]').press('ControlOrMeta+a');
+    await frame.locator('//*[@id="ctl11_CConsumoCod"]').fill(`${detPedido.centro_consumo}`);
+    await frame.locator('//*[@id="ctl11_CConsumoCod"]').press('Tab');
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+
+    await frame.locator('//*[@id="ctl11_BodegaCod"]').click();
+    await frame.locator('//*[@id="ctl11_BodegaCod"]').press('ControlOrMeta+a');
+    await frame.locator('//*[@id="ctl11_BodegaCod"]').fill(`${detPedido.bodega}`);
+    await frame.locator('//*[@id="ctl11_BodegaCod"]').press('Tab');
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+
+    await frame.locator('//*[@id="ctl11_CantidadCompra"]').click();
+    await frame.locator('//*[@id="ctl11_CantidadCompra"]').press('ControlOrMeta+a');
+    await frame.locator('//*[@id="ctl11_CantidadCompra"]').fill(`${detPedido.cantidad_comprar}`);
+    await frame.locator('//*[@id="ctl11_CantidadCompra"]').press('Tab');
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+
+
+    await frame.locator('//*[@id="ctl11_PrecioUni"]').click();
+    await frame.locator('//*[@id="ctl11_PrecioUni"]').press('ControlOrMeta+a');
+    await frame.locator('//*[@id="ctl11_PrecioUni"]').fill(`${detPedido.precio_unitario_neto}`);
+    await frame.locator('//*[@id="ctl11_PrecioUni"]').press('Tab');
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+
+
+    await frame.locator('//*[@id="ctl11_BtnGuardar"]').click();
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+
+    //*[@id="ctl11_BtnVolver"]
+    await frame.locator('//*[@id="ctl11_BtnVolver"]').click();
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(300);
+
+
+}
+
+
+
+
+
 
 module.exports = router;
