@@ -71,9 +71,9 @@ async function processExcel(filePath) {
     await cargaData(jsonData2);
 
 }
-
+let errores = [];
 const validaData = async (jsonData2) => {
-    let errores = [];
+    errores = [];
     let rowCount = 1;
     // Guardar los datos en la base de datos
     for (const row of jsonData2) {
@@ -118,21 +118,21 @@ const validaData = async (jsonData2) => {
                 nOC: parseInt(row['N° OC']) || 0
             };
 
-            await validaEmpresa(row['Empresa']);
+            await validaEmpresa(row['N° Empresa']);
             await validaCentroConsumo(row['Centro consumo']);
             await validaRutProveedor(row['RUT proveedor']);
             await validaCodigoIE(row['Código IE']);
             await validaFechaProceso(row['Fecha proceso']);
             await validaNroSolicitud(row['N° solicitud (ID Forms)']);
             await validaSolicitante(row['Solicitante']);
-            await validaFormaPago(row['Forma pago']);
+            await validaFormaPago(row['Forma Pago\r\n(Numero de cod)']);
             await validaTipoProyecto(row['Tipo proyecto']);
-            await validaNumeroProyecto(row['Tipo proyecto'], row['N° Proyecto']);
+            await validaNumeroProyecto(row['Tipo proyecto'], row['N° proyecto']);
             await validaTipoDocumento(row['Tipo documento']);
             await validaProducto(row['Código producto']);
-            await validaCantidadComprar(row['Cantidad comprar']);
+            await validaCantidadComprar(row['Cantidad Comprar']);
             await validaBodega(row['Bodega']);
-            await validaPrecio(row['Precio unitario neto']);
+            await validaPrecio(row['Precio unitario neto ($/L)']);
 
 
 
@@ -142,7 +142,7 @@ const validaData = async (jsonData2) => {
                 },
             });
             if (existe) {
-                errores.push(`La solicitud ID Forms ${row['N° solicitud (ID Forms)'].toString()} ya existe`);
+                errores.push(`La solicitud ID Forms ${row['N° solicitud (ID Forms)'].toString()} ya existe\r\n`);
             }
         } catch (error) {
             console.error("Error al guardar los datos en la base de datos:", error);
@@ -158,7 +158,7 @@ const validaData = async (jsonData2) => {
 }
 
 const validaTipoProyecto = async (tipoProyecto) => {
-    if (!tipoProyecto || tipoProyecto.trim() === '') {
+    if (!tipoProyecto || isNaN(tipoProyecto) || tipoProyecto <= 0) {
         errores.push(`Tipo de proyecto inválido: '${tipoProyecto}'\r\n`);
         return;
     }
@@ -180,13 +180,13 @@ const validaCantidadComprar = async (cantidad) => {
 }
 
 const validaBodega = async (bodega) => {
-    if (!bodega || bodega.trim() === '') {
+    if (!bodega || isNaN(bodega) || bodega <= 0) {
         errores.push(`Bodega inválida: '${bodega}'\r\n`);
         return;
     }
 
     const sql = `select BodegaId from ExiT_Bodegas 
-                  where BodegaCod='${bodega}'`;
+                  where BodegaCod=${bodega}`;
 
     const bodegaResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!bodegaResult || bodegaResult.length === 0) {
@@ -203,13 +203,13 @@ const validaPrecio = (precio) => {
 const validaEmpresa = async (empresa) => {
     // Lógica de validación de la empresa
 
-    if (!empresa || empresa.trim() === '') {
+    if (!empresa || isNaN(empresa) || empresa <= 0) {
         errores.push(`Empresa inválida: '${empresa}'\r\n`);
         return;
     }
     sql = `SELECT empId 
             FROM GlbT_Empresas 
-            WHERE empid = '${empresa}'`;
+            WHERE empid = ${empresa}`;
 
     const empresaResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!empresaResult || empresaResult.length === 0) {
@@ -224,13 +224,13 @@ const validaSolicitante = async (solicitante) => {
 }
 
 const validaFormaPago = async (formaPago) => {
-    if (!formaPago || formaPago.trim() === '') {
+    if (!formaPago || isNaN(formaPago) || formaPago <= 0) {
         errores.push(`Forma de pago inválida: '${formaPago}'\r\n`);
         return;
     }
     const sql = `SELECT FormaPagoId
                  FROM Glbt_FormaPago
-                 WHERE FormaPagoId = '${formaPago}'`;
+                 WHERE FormaPagoId = ${formaPago}`;
 
     const formaPagoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!formaPagoResult || formaPagoResult.length === 0) {
@@ -239,7 +239,7 @@ const validaFormaPago = async (formaPago) => {
 }
 
 const validaCentroConsumo = async (centroConsumo) => {
-    if (!centroConsumo || centroConsumo.trim() === '') {
+    if (!centroConsumo || isNaN(centroConsumo) || centroConsumo <= 0) {
         errores.push(`Centro de consumo inválido: '${centroConsumo}'\r\n`);
         return;
     }
@@ -289,19 +289,19 @@ const validaRutProveedor = async (rutProveedor) => {
 
 
 const validaCodigoIE = async (codigoIE) => {
-    if (!codigoIE || codigoIE.trim() === '') {
+    if (!codigoIE || isNaN(codigoIE) || codigoIE <= 0) {
         errores.push(`Código IE inválido: '${codigoIE}'\r\n`);
         return;
     }
 
     sql = `SELECT ImpuestoPorc 
             FROM LogT_Impuestos 
-            WHERE ImpuestoId = ${row['Código IE']}
+            WHERE ImpuestoId = ${codigoIE}
               AND FechaVigencia >= getdate()`;
 
     const impuestoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!impuestoResult || impuestoResult.length === 0) {
-        errores.push(`No se encontró impuesto solicitud '${row['N° solicitud (ID Forms)'].toString()}' vigente para Código IE ${row['Código IE']}\r\n`);
+        errores.push(`No se encontró impuesto vigente para Código IE ${codigoIE}\r\n`);
     }
 }
 
@@ -312,13 +312,13 @@ const validaFechaProceso = async (fechaProceso) => {
 }
 
 const validaNroSolicitud = async (nSolicitudIdForms) => {
-    if (!nSolicitudIdForms || nSolicitudIdForms.trim() === '') {
+    if (!nSolicitudIdForms || nSolicitudIdForms.toString().trim() === '') {
         errores.push(`Número de solicitud inválido: '${nSolicitudIdForms}'\r\n`);
     }
 }
 
 const validaNumeroProyecto = async (tipoProyecto, numeroProyecto) => {
-    if (!numeroProyecto || numeroProyecto.trim() === '') {
+    if (!numeroProyecto || isNaN(numeroProyecto) || numeroProyecto <= 0) {
         errores.push(`Número de proyecto inválido: '${numeroProyecto}'\r\n`);
         return;
     }
@@ -336,7 +336,7 @@ const validaNumeroProyecto = async (tipoProyecto, numeroProyecto) => {
 }
 
 const validaTipoDocumento = async (tipoDocumento) => {
-    if (!tipoDocumento || tipoDocumento.trim() === '') {
+    if (!tipoDocumento || isNaN(tipoDocumento) || tipoDocumento <= 0) {
         errores.push(`Tipo de documento inválido: '${tipoDocumento}'\r\n`);
         return;
     }
@@ -352,7 +352,7 @@ const validaTipoDocumento = async (tipoDocumento) => {
 }
 
 const validaProducto = async (codigo) => {
-    if (!codigo || codigo.trim() === '') {
+    if (!codigo || codigo.toString().trim() === '') {
         errores.push(`Código de producto inválido: '${codigo}'\r\n`);
         return;
     }
