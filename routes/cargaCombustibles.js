@@ -118,15 +118,22 @@ const validaData = async (jsonData2) => {
                 nOC: parseInt(row['N° OC']) || 0
             };
 
-            sql = `SELECT ImpuestoPorc 
-            FROM LogT_Impuestos 
-            WHERE ImpuestoId = ${row['Código IE']}
-              AND FechaVigencia >= getdate()`;
+            await validaEmpresa(row['Empresa']);
+            await validaCentroConsumo(row['Centro consumo']);
+            await validaRutProveedor(row['RUT proveedor']);
+            await validaCodigoIE(row['Código IE']);
+            await validaFechaProceso(row['Fecha proceso']);
+            await validaNroSolicitud(row['N° solicitud (ID Forms)']);
+            await validaSolicitante(row['Solicitante']);
+            await validaFormaPago(row['Forma pago']);
+            await validaTipoProyecto(row['Tipo proyecto']);
+            await validaNumeroProyecto(row['Tipo proyecto'], row['N° Proyecto']);
+            await validaTipoDocumento(row['Tipo documento']);
+            await validaProducto(row['Código producto']);
+            await validaCantidadComprar(row['Cantidad comprar']);
+            await validaBodega(row['Bodega']);
+            await validaPrecio(row['Precio unitario neto']);
 
-            const impuestoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
-            if (!impuestoResult || impuestoResult.length === 0) {
-                errores.push(`No se encontró impuesto solicitud '${row['N° solicitud (ID Forms)'].toString()}' vigente para Código IE ${row['Código IE']}\r\n`);
-            }
 
 
             const existe = await rpaCombustibles.findOne({
@@ -148,6 +155,215 @@ const validaData = async (jsonData2) => {
         throw new Error(`Errores encontrados: ${errores.join(", ")}`);
     }
     console.log("Datos validados correctamente");
+}
+
+const validaTipoProyecto = async (tipoProyecto) => {
+    if (!tipoProyecto || tipoProyecto.trim() === '') {
+        errores.push(`Tipo de proyecto inválido: '${tipoProyecto}'\r\n`);
+        return;
+    }
+
+    const sql = `SELECT tprid
+                 FROM GlbT_TiposProyectos
+                 WHERE tprid = ${tipoProyecto}`;
+
+    const tipoProyectoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!tipoProyectoResult || tipoProyectoResult.length === 0) {
+        errores.push(`No se encontró el tipo de proyecto '${tipoProyecto}'\r\n`);
+    }
+}
+
+const validaCantidadComprar = async (cantidad) => {
+    if (!cantidad || isNaN(cantidad) || cantidad <= 0) {
+        errores.push(`Cantidad a comprar inválida: '${cantidad}'\r\n`);
+    }
+}
+
+const validaBodega = async (bodega) => {
+    if (!bodega || bodega.trim() === '') {
+        errores.push(`Bodega inválida: '${bodega}'\r\n`);
+        return;
+    }
+
+    const sql = `select BodegaId from ExiT_Bodegas 
+                  where BodegaCod='${bodega}'`;
+
+    const bodegaResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!bodegaResult || bodegaResult.length === 0) {
+        errores.push(`No se encontró la bodega con código '${bodega}'\r\n`);
+    }
+}
+
+const validaPrecio = (precio) => {
+    if (!precio || isNaN(precio) || precio <= 0) {
+        errores.push(`Precio inválido: '${precio}'\r\n`);
+    }
+}
+
+const validaEmpresa = async (empresa) => {
+    // Lógica de validación de la empresa
+
+    if (!empresa || empresa.trim() === '') {
+        errores.push(`Empresa inválida: '${empresa}'\r\n`);
+        return;
+    }
+    sql = `SELECT empId 
+            FROM GlbT_Empresas 
+            WHERE empid = '${empresa}'`;
+
+    const empresaResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!empresaResult || empresaResult.length === 0) {
+        errores.push(`No se encontró la empresa '${empresa}'\r\n`);
+    }
+}
+
+const validaSolicitante = async (solicitante) => {
+    if (!solicitante || solicitante.trim() === '') {
+        errores.push(`Solicitante inválido: '${solicitante}'\r\n`);
+    }
+}
+
+const validaFormaPago = async (formaPago) => {
+    if (!formaPago || formaPago.trim() === '') {
+        errores.push(`Forma de pago inválida: '${formaPago}'\r\n`);
+        return;
+    }
+    const sql = `SELECT FormaPagoId
+                 FROM Glbt_FormaPago
+                 WHERE FormaPagoId = '${formaPago}'`;
+
+    const formaPagoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!formaPagoResult || formaPagoResult.length === 0) {
+        errores.push(`No se encontró la forma de pago '${formaPago}'\r\n`);
+    }
+}
+
+const validaCentroConsumo = async (centroConsumo) => {
+    if (!centroConsumo || centroConsumo.trim() === '') {
+        errores.push(`Centro de consumo inválido: '${centroConsumo}'\r\n`);
+        return;
+    }
+
+    sql = `SELECT CConsumoCod,
+                  CConsumoDes
+            FROM ExiT_CentroConsumo
+            WHERE CConsumoCod = '${centroConsumo}'`;
+
+    const centroConsumoExiTResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!centroConsumoExiTResult || centroConsumoExiTResult.length === 0) {
+        errores.push(`No se encontró el centro de consumo '${centroConsumo}'\r\n`);
+    }
+}
+
+
+const validaRutProveedor = async (rutProveedor) => {
+    //formatear rutProveedor eliminando puntos y dejando 10 para el numero, 
+    // rellenando con ceros a la izquierda si es necesario,
+    // el formato de entrada es 99.999.999-9, el de salida es 9999999999-C
+    // no eliminar el guion y el digito final del RUT
+
+    if (!rutProveedor || rutProveedor.trim() === '') {
+        errores.push(`RUT de proveedor inválido: '${rutProveedor}'\r\n`);
+        return;
+    }
+
+    let parteNumero = rutProveedor.split('-')[0];
+    const digitoVerificador = rutProveedor.split('-')[1];
+
+    parteNumero = parteNumero.replace(/\./g, '');
+    while (parteNumero.length < 10) {
+        parteNumero = '0' + parteNumero;
+    }
+    rutProveedor = `${parteNumero}-${digitoVerificador}`;
+
+
+    sql = `SELECT EntId 
+            FROM GlbT_Entidad
+            WHERE EntRut = '${rutProveedor}'`;
+
+    const proveedorResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!proveedorResult || proveedorResult.length === 0) {
+        errores.push(`No se encontró el proveedor con RUT '${rutProveedor}'\r\n`);
+    }
+}
+
+
+const validaCodigoIE = async (codigoIE) => {
+    if (!codigoIE || codigoIE.trim() === '') {
+        errores.push(`Código IE inválido: '${codigoIE}'\r\n`);
+        return;
+    }
+
+    sql = `SELECT ImpuestoPorc 
+            FROM LogT_Impuestos 
+            WHERE ImpuestoId = ${row['Código IE']}
+              AND FechaVigencia >= getdate()`;
+
+    const impuestoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!impuestoResult || impuestoResult.length === 0) {
+        errores.push(`No se encontró impuesto solicitud '${row['N° solicitud (ID Forms)'].toString()}' vigente para Código IE ${row['Código IE']}\r\n`);
+    }
+}
+
+const validaFechaProceso = async (fechaProceso) => {
+    if (!fechaProceso || isNaN(Date.parse(fechaProceso))) {
+        errores.push(`Fecha de proceso inválida: '${fechaProceso}'\r\n`);
+    }
+}
+
+const validaNroSolicitud = async (nSolicitudIdForms) => {
+    if (!nSolicitudIdForms || nSolicitudIdForms.trim() === '') {
+        errores.push(`Número de solicitud inválido: '${nSolicitudIdForms}'\r\n`);
+    }
+}
+
+const validaNumeroProyecto = async (tipoProyecto, numeroProyecto) => {
+    if (!numeroProyecto || numeroProyecto.trim() === '') {
+        errores.push(`Número de proyecto inválido: '${numeroProyecto}'\r\n`);
+        return;
+    }
+
+    const sql = `SELECT PryId
+                 FROM GlbT_Proyectos
+                 WHERE pTprId = ${tipoProyecto}
+                   AND PryNumero = ${numeroProyecto}`;
+
+
+    const numeroProyectoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!numeroProyectoResult || numeroProyectoResult.length === 0) {
+        errores.push(`No se encontró el número de proyecto '${numeroProyecto}' para el tipo de proyecto '${tipoProyecto}'\r\n`);
+    }
+}
+
+const validaTipoDocumento = async (tipoDocumento) => {
+    if (!tipoDocumento || tipoDocumento.trim() === '') {
+        errores.push(`Tipo de documento inválido: '${tipoDocumento}'\r\n`);
+        return;
+    }
+
+    const sql = `SELECT TdoId
+                 FROM GlbT_Documentos
+                 WHERE TdoId = ${tipoDocumento}`;
+
+    const tipoDocumentoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!tipoDocumentoResult || tipoDocumentoResult.length === 0) {
+        errores.push(`No se encontró el tipo de documento '${tipoDocumento}'\r\n`);
+    }
+}
+
+const validaProducto = async (codigo) => {
+    if (!codigo || codigo.trim() === '') {
+        errores.push(`Código de producto inválido: '${codigo}'\r\n`);
+        return;
+    }
+
+    const sql = `select productoid from ExiT_Productos
+                  where productocod = '${codigo}'`;
+
+    const productoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!productoResult || productoResult.length === 0) {
+        errores.push(`No se encontró el producto con código '${codigo}'\r\n`);
+    }
 }
 
 const cargaData = async (jsonData2) => {
