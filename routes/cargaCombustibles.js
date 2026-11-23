@@ -79,6 +79,7 @@ const validaData = async (jsonData2) => {
     for (const row of jsonData2) {
         rowCount++;
 
+
         let erroresEncabezado = "";
         if (rowCount === 2) {
             erroresEncabezado = await validaEncabezados(row);
@@ -122,7 +123,7 @@ const validaData = async (jsonData2) => {
             await validaCentroConsumo(row['Centro consumo']);
             await validaRutProveedor(row['RUT proveedor']);
             await validaCodigoIE(row['Código IE']);
-            await validaFechaProceso(row['Fecha proceso']);
+            await validaFechaProceso(row['N° Empresa'], row['Fecha proceso']);
             await validaNroSolicitud(row['N° solicitud (ID Forms)']);
             await validaSolicitante(row['Solicitante']);
             await validaFormaPago(row['Forma Pago\r\n(Numero de cod)']);
@@ -305,10 +306,45 @@ const validaCodigoIE = async (codigoIE) => {
     }
 }
 
-const validaFechaProceso = async (fechaProceso) => {
+const validaFechaProceso = async (empresa, fechaProceso) => {
     if (!fechaProceso || isNaN(Date.parse(fechaProceso))) {
         errores.push(`Fecha de proceso inválida: '${fechaProceso}'\r\n`);
+        return;
     }
+    fechaProceso = excelDateToString(fechaProceso);
+    const sql = `SELECT TOP 1 Perid
+                 FROM GlbT_Periodos
+                 WHERE PerFecInicio <= '${fechaProceso}'
+                   AND PerFecTermino >= '${fechaProceso}'
+                   AND pEmpid = ${empresa}`;
+    const periodo = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!periodo || periodo.length === 0) {
+        errores.push(`No se encontró un período válido para la fecha de proceso '${fechaProceso}'\r\n`);
+        return;
+    }
+    const perid = periodo[0].Perid;
+
+    const sql2 = `
+            SELECT [CorrLogtId]
+            ,[pEmpId]
+            ,[DivCodigo]
+            ,[PerId]
+            ,[pTipoOpeId]
+            ,[Id_Funcionalidad]
+            ,[CorrLogtNum]
+            ,[Fec_Ing_Reg]
+            ,[Id_Usuario_Ing_Reg]
+            ,[Fec_Ult_Modif_Reg]
+            ,[Id_Usuario_Ult_Modif_Reg]
+        FROM [fin700].[dbo].[LogT_Correlativos] 
+        WHERE pempid = ${empresa}
+        AND Id_Funcionalidad='ADQOPEOCOMPRA'
+        AND PERID = ${perid}`;
+    const correlativos = await sequelizeFin700.query(sql2, { type: sequelizeFin700.QueryTypes.SELECT });
+    if (!correlativos || correlativos.length === 0) {
+        errores.push(`No se encontraron correlativos válidos para la empresa '${empresa}' y el período '${perid}'\r\n`);
+    }
+
 }
 
 const validaNroSolicitud = async (nSolicitudIdForms) => {

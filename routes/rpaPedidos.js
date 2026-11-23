@@ -164,12 +164,14 @@ const procesaData = async (nroPedido) => {
             await procesaPedido(pedido.EmpId, pedido.NumPedido, pedido.ListaPrecios);
         }
         console.log("Finished processing all pedidos.");
+        await logoutFin700();
         await browser.close();
 
     } catch (error) {
         console.log(error.message);
         //res.status(500).json({ error: "Internal Server Error" });
         console.log("Error during scheduled task: " + error.message);
+        await logoutFin700();
         await browser.close();
     }
 
@@ -225,6 +227,28 @@ async function loginFin700() {
 
     } catch (error) {
         console.error("Error during login:", error);
+        throw error;
+    }
+}
+
+const logoutFin700 = async () => {
+    try {
+        const btnLogoutSelector = '#info > div > a:nth-child(4) > span.header_text';
+        const btnLogout = await page.$(btnLogoutSelector);
+        if (btnLogout) {
+            await btnLogout.click();
+            await page.waitForLoadState('load');
+
+            const frameOut = page.frameLocator('iframe[name="iframe_body"]');
+            const btnTerminar = frameOut.locator('#ctl11_Btnterminar');
+
+            if (await btnTerminar.count() > 0) {
+                await btnTerminar.click();
+                await page.waitForLoadState('load');
+            }
+        }
+    } catch (error) {
+        console.error("Error during logout:", error);
         throw error;
     }
 }

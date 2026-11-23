@@ -196,6 +196,7 @@ const encolaProcesoOrden = async (pedido) => {
         if (await pedidoSinOc(pedido)) {
             await generarOrdenCompra(pedido);
         }
+        await logoutFin700();
     } catch (error) {
         console.error(`Error procesando orden de compra para pedido ID: ${pedido.id}`, error);
     } finally {
@@ -219,6 +220,7 @@ const encolaAprobacionOrden = async (pedido) => {
         await loginFin700();
         console.log("Login successful");
         await apruebaOrdenCompra(pedido);
+        await logoutFin700();
     } catch (error) {
         console.error(`Error procesando orden de compra para pedido ID: ${pedido.id}`, error);
     } finally {
@@ -241,6 +243,7 @@ const encolaProcesoOrdenCombustibles = async (pedido) => {
         await loginFin700();
         console.log("Login successful");
         await generarOrdenCompraCombustibles(pedido);
+        await logoutFin700();
     } catch (error) {
         console.error(`Error procesando orden de compra para pedido ID: ${pedido.n_solicitud_id_forms}`, error);
     } finally {
@@ -302,6 +305,28 @@ async function loginFin700() {
 
     } catch (error) {
         console.error("Error during login:", error);
+        throw error;
+    }
+}
+
+const logoutFin700 = async () => {
+    try {
+        const btnLogoutSelector = '#info > div > a:nth-child(4) > span.header_text';
+        const btnLogout = await page.$(btnLogoutSelector);
+        if (btnLogout) {
+            await btnLogout.click();
+            await page.waitForLoadState('load');
+
+            const frameOut = page.frameLocator('iframe[name="iframe_body"]');
+            const btnTerminar = frameOut.locator('#ctl11_Btnterminar');
+
+            if (await btnTerminar.count() > 0) {
+                await btnTerminar.click();
+                await page.waitForLoadState('load');
+            }
+        }
+    } catch (error) {
+        console.error("Error during logout:", error);
         throw error;
     }
 }
@@ -557,6 +582,7 @@ const apruebaOrdenCompra = async (pedido) => {
     await page.frameLocator('#iframe_body').locator('#ctl11_BtnVolver').click();
     await page.getByRole('link', { name: 'Salir' }).click();
     await page.frameLocator('#iframe_body').locator('#ctl11_Btnterminar').click();
+
 
 
 }
@@ -922,6 +948,9 @@ const procesarCabeceraCombustible = async (pedido) => {
     await btnVolver.click();
     await page.waitForLoadState('load');
 
+    // esperar 2 segundos antes de continuar
+    await page.waitForTimeout(2000);
+
     console.log('Cabecera de combustible para pedido:', pedido.n_solicitud_id_forms);
 
 
@@ -1034,6 +1063,12 @@ const menuOtros = async () => {
 
 const menuAprobar = async () => {
     // Determina si #lnk10 está en el iframe_body o en page (top)
+    // scroll to top of the page
+    // esperar 1 segundo antes de continuar
+    await page.waitForTimeout(1000);
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+
     const iframeBody = page.frameLocator('iframe#iframe_body');
     const scope = (await iframeBody.locator('div#lnk10').count()) > 0 ? iframeBody : page;
 
@@ -1145,10 +1180,11 @@ const procesarDetalleCombustible = async (detPedido) => {
 
     await frame.locator('//*[@id="HylDetalle"]').click();
     await page.waitForLoadState('load');
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(3000);
 
     frame = page.frameLocator('iframe.k-content-frame[src*="ucAdqComprasDetalle"]');
 
+    console.log(`Procesando detalle de combustible para el producto: ${JSON.stringify(detPedido.codigo_producto)}`);
     await frame.locator('//*[@id="ctl11_CodigoAlternativo"]').click();
     await frame.locator('//*[@id="ctl11_CodigoAlternativo"]').press('ControlOrMeta+a');
     await frame.locator('//*[@id="ctl11_CodigoAlternativo"]').fill(`${detPedido.codigo_producto}`);
@@ -1170,17 +1206,30 @@ const procesarDetalleCombustible = async (detPedido) => {
     await page.waitForLoadState('load');
     await page.waitForTimeout(300);
 
+    //convertir a string y cambiar punto decimal a coma si es necesario
+    let cantidadComprar = detPedido.cantidad_comprar;
+    if (typeof cantidadComprar === 'number') {
+        cantidadComprar = cantidadComprar.toString().replace('.', ',');
+    } else if (typeof cantidadComprar === 'string') {
+        cantidadComprar = cantidadComprar.replace('.', ',');
+    }
     await frame.locator('//*[@id="ctl11_CantidadCompra"]').click();
     await frame.locator('//*[@id="ctl11_CantidadCompra"]').press('ControlOrMeta+a');
-    await frame.locator('//*[@id="ctl11_CantidadCompra"]').fill(`${detPedido.cantidad_comprar}`);
+    await frame.locator('//*[@id="ctl11_CantidadCompra"]').fill(`${cantidadComprar}`);
     await frame.locator('//*[@id="ctl11_CantidadCompra"]').press('Tab');
     await page.waitForLoadState('load');
     await page.waitForTimeout(300);
 
-
+    //convertir a string y cambiar punto decimal a coma si es necesario
+    let precioUnitario = detPedido.precio_unitario_neto;
+    if (typeof precioUnitario === 'number') {
+        precioUnitario = precioUnitario.toString().replace('.', ',');
+    } else if (typeof precioUnitario === 'string') {
+        precioUnitario = precioUnitario.replace('.', ',');
+    }
     await frame.locator('//*[@id="ctl11_PrecioUni"]').click();
     await frame.locator('//*[@id="ctl11_PrecioUni"]').press('ControlOrMeta+a');
-    await frame.locator('//*[@id="ctl11_PrecioUni"]').fill(`${detPedido.precio_unitario_neto}`);
+    await frame.locator('//*[@id="ctl11_PrecioUni"]').fill(`${precioUnitario}`);
     await frame.locator('//*[@id="ctl11_PrecioUni"]').press('Tab');
     await page.waitForLoadState('load');
     await page.waitForTimeout(300);
