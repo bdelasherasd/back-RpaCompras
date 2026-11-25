@@ -39,10 +39,10 @@ let page = null;
 
 
 // Validador de pedidos
-const INTERVALO_SEGUNDOS = 3600;
+const INTERVALO_SEGUNDOS = 360000;
 setInterval(async () => {
-    await GenerarOrdenCompra();
-    await aprobarOrdenCompra();
+    //await GenerarOrdenCompra();
+    //await aprobarOrdenCompra();
     await GenerarOrdenCompraCombustibles();
 }, INTERVALO_SEGUNDOS * 1000);
 

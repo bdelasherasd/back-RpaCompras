@@ -26,7 +26,9 @@ var rpaPedidos = sequelize.define("rpaPedidos", {
   iaFirmaElectronica: type.STRING,
   iaFirmaManuscrita: type.STRING,
   iaEmail: type.STRING,
-  cantidadContactos: type.INTEGER
+  cantidadContactos: type.INTEGER,
+  eliminado: type.BOOLEAN,
+  EntConId: type.INTEGER
 });
 //sequelize.sync({ alter: true });
 

@@ -5,6 +5,8 @@ var sequelize = require("../models/sequelizeConnection");
 var sequelizeFin700 = require("../models/sequelizeFin700");
 const showLog = require("../middleware/showLog");
 const rpaPedidos = require("../models/rpaPedidos");
+const rpaHorario = require("../models/rpaHorario");
+const task = require("../models/task");
 const { chromium } = require('playwright');
 require("dotenv").config({ path: "variables.env" });
 
@@ -59,28 +61,70 @@ router.get("/pedidos/:nroPedido", cors(), async function (req, res) {
 
 router.post("/agendaCron", cors(), async function (req, res) {
     showLog(req, res);
-    const { nroPedido } = req.body;
+    const { nroPedido, frecuencia, horario } = req.body;
+
+    //Si nroPedido=0 se procesan todos los pedidos
+
+    let t;
+    try {
+        t = await sequelize.transaction();
+        await rpaHorario.destroy({ truncate: true });
+        await rpaHorario.create({
+            frecuencia: frecuencia,
+            horario: horario
+        });
+        await t.commit();
+    } catch (error) {
+        await t.rollback();
+        console.log(error);
+    }
 
     let diaCron = "";
-    if (req.body.data.dia == 0) {
+    if (frecuencia == 'TODOS LOS DIAS') {
         diaCron = "0-6";
-    } else {
-        diaCron = (Number(req.body.data.dia) - 1).toString();
     }
+    else if (frecuencia == 'LUNES-VIERNES') {
+        diaCron = "1-5";
+    }
+    else if (frecuencia == 'LUNES') {
+        diaCron = "1";
+    }
+    else if (frecuencia == 'MARTES') {
+        diaCron = "2";
+    }
+    else if (frecuencia == 'MIÉRCOLES') {
+        diaCron = "3";
+    }
+    else if (frecuencia == 'JUEVES') {
+        diaCron = "4";
+    }
+    else if (frecuencia == 'VIERNES') {
+        diaCron = "5";
+    }
+    else if (frecuencia == 'SÁBADO') {
+        diaCron = "6";
+    }
+    else if (frecuencia == 'DOMINGO') {
+        diaCron = "0";
+    }
+
+    const hora = horario.split(":")[0];
+    const minuto = horario.split(":")[1];
 
     let taskdata = {
         dia: diaCron,
-        hora: req.body.data.hora,
-        minuto: req.body.data.minuto,
-        sessionID: req.sessionID,
-        nroPedido: req.body.data.nroPedido
+        hora: hora,
+        minuto: minuto,
+        sessionID: 1,
+        nroPedido: nroPedido,
+        username: 'admin'
     }
 
 
     try {
-        let cronTime = req.body.data.minuto + ' ' + req.body.data.hora + ' * * ' + diaCron
+        let cronTime = minuto + ' ' + hora + ' * * ' + diaCron
         var job = cron.schedule(cronTime, async function () {
-            console.log('Inicio Ejecución Programada RPA Pedidos' + req.body.data.hora + ':' + req.body.data.minuto + '/' + diaCron);
+            console.log('Inicio Ejecución Programada RPA Pedidos' + hora + ':' + minuto + '/' + diaCron);
             await procesaData(taskdata.nroPedido);
         }, {
             scheduled: true,
@@ -88,9 +132,10 @@ router.post("/agendaCron", cors(), async function (req, res) {
         });
         var item = {
             aplicacion: 'APIPedidos', username: req.session.username,
-            hora: req.body.data.hora, minuto: req.body.data.minuto,
-            taskdata: JSON.stringify(taskdata), res: ''
+            hora: hora, minuto: minuto,
+            taskdata: JSON.stringify(taskdata), res: '', username: 'admin'
         }
+        task.destroy({ where: { aplicacion: 'APIPedidos' } });
         task.create(item)
             .then(datanew => {
                 global.tjobs.push({ id: datanew.idTask, job: job });
@@ -856,9 +901,7 @@ async function getCantidadContactos(dataPedido) {
 
     const sql = `select ec.EntConMail from
                 glbt_entidad en join 
-                glbt_entidadsucursal es on en.entid = es.pentid and es.EntSucNumero >= 1 join
-                GlbT_EntidadSucursalContacto esc on esc.pEntSucId = es.EntSucId join
-                GlbT_EntidadContacto ec on ec.pEntId = en.entid and ec.EntConId = esc.pEntConId
+                GlbT_EntidadContacto ec on ec.pEntId = en.entid 
                 where en.entrut = '${rutPedido}'`;
 
     const result = await sequelizeFin700.query(sql, { type: sequelize.QueryTypes.SELECT });

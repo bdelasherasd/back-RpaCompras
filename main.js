@@ -54,6 +54,9 @@ app.use("/rpaOrdenCompra", rpaOrdenCompraRoutes);
 var cargaCombustiblesRoutes = require("./routes/cargaCombustibles");
 app.use("/cargaCombustibles", cargaCombustiblesRoutes);
 
+var generadorOCRoutes = require("./routes/generadorOC");
+app.use("/generadorOC", generadorOCRoutes);
+
 app.use(express.static(path.join(__dirname, "../front/dist")));
 
 app.use("/pdfs", express.static(path.join(__dirname, "./pdf")));
