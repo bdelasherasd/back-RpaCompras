@@ -58,6 +58,21 @@ router.get("/pedidos/:nroPedido", cors(), async function (req, res) {
     }
 });
 
+router.get("/estadoRobot", cors(), async function (req, res) {
+    //showLog(req, res);
+    try {
+        if (procesandoPedidos) {
+            res.status(200).json({ message: "Robot está procesando pedidos", trabajando: true });
+        } else {
+            res.status(200).json({ message: "Robot está inactivo", trabajando: false });
+        }
+    } catch (error) {
+        console.log(error.message);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+
 
 router.post("/agendaCron", cors(), async function (req, res) {
     showLog(req, res);
@@ -191,8 +206,16 @@ async function getPedidos(nroPedido) {
     return data[0];
 }
 
+let procesandoPedidos = false;
 
 const procesaData = async (nroPedido) => {
+    if (procesandoPedidos) {
+        console.log("Procesando pedidos. Skipping this run.");
+        throw new Error("Ya está procesando pedidos.");
+        return;
+    }
+    procesandoPedidos = true;
+
     //nroPedido = 1644900;
     let NroDePedidos = await getPedidos(nroPedido);
     browser = await chromium.launch({ headless: false });
@@ -218,6 +241,9 @@ const procesaData = async (nroPedido) => {
         console.log("Error during scheduled task: " + error.message);
         await logoutFin700();
         await browser.close();
+        throw error;
+    } finally {
+        procesandoPedidos = false;
     }
 
 }

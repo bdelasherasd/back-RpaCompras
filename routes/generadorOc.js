@@ -61,6 +61,30 @@ router.get("/listVisadores", cors(), async function (req, res) {
 }
 );
 
+router.get("/historial", cors(), async function (req, res) {
+    showLog(req, res);
+    try {
+        sql = `exec pRpaGetPedidosHistorial ''`
+        const historial = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
+        res.status(200).send(historial);
+    } catch (error) {
+        res.status(500).send({ error: error.message, ok: false });
+    }
+}
+);
+
+router.get("/ocsHoy", cors(), async function (req, res) {
+    showLog(req, res);
+    try {
+        sql = `exec pRpaGetPedidosOcsHoy ''`
+        const historial = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
+        res.status(200).send(historial);
+    } catch (error) {
+        res.status(500).send({ error: error.message, ok: false });
+    }
+}
+);
+
 router.get("/ScPorId/:id", cors(), async function (req, res) {
     showLog(req, res);
     try {
