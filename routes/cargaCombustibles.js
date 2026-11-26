@@ -119,20 +119,20 @@ const validaData = async (jsonData2) => {
                 nOC: parseInt(row['N° OC']) || 0
             };
 
-            await validaEmpresa(row['N° Empresa'], rowCount);
-            await validaCentroConsumo(row['Centro consumo'], rowCount);
-            await validaRutProveedor(row['RUT proveedor'], rowCount);
-            await validaCodigoIE(row['Código IE'], rowCount);
-            await validaFechaProceso(row['N° Empresa'], row['Fecha proceso'], rowCount);
-            await validaNroSolicitud(row['N° solicitud (ID Forms)'], rowCount);
-            await validaSolicitante(row['Solicitante'], rowCount);
-            await validaFormaPago(row['Forma Pago\r\n(Numero de cod)'], rowCount);
-            await validaTipoProyecto(row['Tipo proyecto'], rowCount);
-            await validaNumeroProyecto(row['Tipo proyecto'], row['N° proyecto'], rowCount);
-            await validaTipoDocumento(row['Tipo documento'], rowCount);
-            await validaProducto(row['Código producto'], rowCount);
-            await validaCantidadComprar(row['Cantidad Comprar'], rowCount);
-            await validaBodega(row['Bodega'], rowCount);
+            await validaEmpresa(row['N° Empresa'], rowCount, 'N° Empresa');
+            await validaCentroConsumo(row['Centro consumo'], rowCount, 'Centro consumo');
+            await validaRutProveedor(row['RUT proveedor'], rowCount, 'RUT proveedor');
+            await validaCodigoIE(row['Código IE'], rowCount, 'Código IE');
+            await validaFechaProceso(row['N° Empresa'], row['Fecha proceso'], rowCount, 'Fecha proceso');
+            await validaNroSolicitud(row['N° solicitud (ID Forms)'], rowCount, 'N° solicitud (ID Forms)');
+            await validaSolicitante(row['Solicitante'], rowCount, 'Solicitante');
+            await validaFormaPago(row['Forma Pago\r\n(Numero de cod)'], rowCount, 'Forma Pago\r\n(Numero de cod)');
+            await validaTipoProyecto(row['Tipo proyecto'], rowCount, 'Tipo proyecto');
+            await validaNumeroProyecto(row['Tipo proyecto'], row['N° proyecto'], rowCount, 'N° proyecto');
+            await validaTipoDocumento(row['Tipo documento'], rowCount, 'Tipo documento');
+            await validaProducto(row['Código producto'], rowCount, 'Código producto');
+            await validaCantidadComprar(row['Cantidad Comprar'], rowCount, 'Cantidad Comprar');
+            await validaBodega(row['Bodega'], rowCount, 'Bodega');
             await validaPrecio(row['Precio unitario neto ($/L)'], rowCount);
 
 
@@ -150,9 +150,9 @@ const validaData = async (jsonData2) => {
     console.log("Datos validados correctamente");
 }
 
-const validaTipoProyecto = async (tipoProyecto, rowCount) => {
+const validaTipoProyecto = async (tipoProyecto, rowCount, fieldName) => {
     if (!tipoProyecto || isNaN(tipoProyecto) || tipoProyecto <= 0) {
-        errores.push({ row: rowCount, message: `Tipo de proyecto inválido: '${tipoProyecto}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Tipo de proyecto inválido: '${tipoProyecto}'\r\n` });
         return;
     }
 
@@ -162,19 +162,19 @@ const validaTipoProyecto = async (tipoProyecto, rowCount) => {
 
     const tipoProyectoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!tipoProyectoResult || tipoProyectoResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró el tipo de proyecto '${tipoProyecto}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró el tipo de proyecto '${tipoProyecto}'\r\n` });
     }
 }
 
-const validaCantidadComprar = async (cantidad, rowCount) => {
+const validaCantidadComprar = async (cantidad, rowCount, fieldName) => {
     if (!cantidad || isNaN(cantidad) || cantidad <= 0) {
-        errores.push({ row: rowCount, message: `Cantidad a comprar inválida: '${cantidad}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Cantidad a comprar inválida: '${cantidad}'\r\n` });
     }
 }
 
-const validaBodega = async (bodega, rowCount) => {
+const validaBodega = async (bodega, rowCount, fieldName) => {
     if (!bodega || isNaN(bodega) || bodega <= 0) {
-        errores.push({ row: rowCount, message: `Bodega inválida: '${bodega}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Bodega inválida: '${bodega}'\r\n` });
         return;
     }
 
@@ -183,20 +183,20 @@ const validaBodega = async (bodega, rowCount) => {
 
     const bodegaResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!bodegaResult || bodegaResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró la bodega con código '${bodega}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró la bodega con código '${bodega}'\r\n` });
     }
 }
 
-const validaPrecio = (precio, rowCount) => {
+const validaPrecio = (precio, rowCount, fieldName) => {
     if (!precio || isNaN(precio) || precio <= 0) {
-        errores.push({ row: rowCount, message: `Precio inválido: '${precio}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Precio inválido: '${precio}'\r\n` });
     }
 }
-const validaEmpresa = async (empresa, rowCount) => {
+const validaEmpresa = async (empresa, rowCount, fieldName) => {
     // Lógica de validación de la empresa
 
     if (!empresa || isNaN(empresa) || empresa <= 0) {
-        errores.push({ row: rowCount, message: `Empresa inválida: '${empresa}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Empresa inválida: '${empresa}'\r\n` });
         return;
     }
     sql = `SELECT empId 
@@ -205,19 +205,19 @@ const validaEmpresa = async (empresa, rowCount) => {
 
     const empresaResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!empresaResult || empresaResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró la empresa '${empresa}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró la empresa '${empresa}'\r\n` });
     }
 }
 
-const validaSolicitante = async (solicitante, rowCount) => {
+const validaSolicitante = async (solicitante, rowCount, fieldName) => {
     if (!solicitante || solicitante.trim() === '') {
-        errores.push({ row: rowCount, message: `Solicitante inválido: '${solicitante}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Solicitante inválido: '${solicitante}'\r\n` });
     }
 }
 
-const validaFormaPago = async (formaPago, rowCount) => {
+const validaFormaPago = async (formaPago, rowCount, fieldName) => {
     if (!formaPago || isNaN(formaPago) || formaPago <= 0) {
-        errores.push({ row: rowCount, message: `Forma de pago inválida: '${formaPago}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Forma de pago inválida: '${formaPago}'\r\n` });
         return;
     }
     const sql = `SELECT FormaPagoId
@@ -226,13 +226,13 @@ const validaFormaPago = async (formaPago, rowCount) => {
 
     const formaPagoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!formaPagoResult || formaPagoResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró la forma de pago '${formaPago}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró la forma de pago '${formaPago}'\r\n` });
     }
 }
 
-const validaCentroConsumo = async (centroConsumo, rowCount) => {
+const validaCentroConsumo = async (centroConsumo, rowCount, fieldName) => {
     if (!centroConsumo || isNaN(centroConsumo) || centroConsumo <= 0) {
-        errores.push({ row: rowCount, message: `Centro de consumo inválido: '${centroConsumo}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Centro de consumo inválido: '${centroConsumo}'\r\n` });
         return;
     }
 
@@ -243,19 +243,19 @@ const validaCentroConsumo = async (centroConsumo, rowCount) => {
 
     const centroConsumoExiTResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!centroConsumoExiTResult || centroConsumoExiTResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró el centro de consumo '${centroConsumo}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró el centro de consumo '${centroConsumo}'\r\n` });
     }
 }
 
 
-const validaRutProveedor = async (rutProveedor, rowCount) => {
+const validaRutProveedor = async (rutProveedor, rowCount, fieldName) => {
     //formatear rutProveedor eliminando puntos y dejando 10 para el numero, 
     // rellenando con ceros a la izquierda si es necesario,
     // el formato de entrada es 99.999.999-9, el de salida es 9999999999-C
     // no eliminar el guion y el digito final del RUT
 
     if (!rutProveedor || rutProveedor.trim() === '') {
-        errores.push({ row: rowCount, message: `RUT de proveedor inválido: '${rutProveedor}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `RUT de proveedor inválido: '${rutProveedor}'\r\n` });
         return;
     }
 
@@ -275,14 +275,14 @@ const validaRutProveedor = async (rutProveedor, rowCount) => {
 
     const proveedorResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!proveedorResult || proveedorResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró el proveedor con RUT '${rutProveedor}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró el proveedor con RUT '${rutProveedor}'\r\n` });
     }
 }
 
 
-const validaCodigoIE = async (codigoIE, rowCount) => {
+const validaCodigoIE = async (codigoIE, rowCount, fieldName) => {
     if (!codigoIE || isNaN(codigoIE) || codigoIE <= 0) {
-        errores.push({ row: rowCount, message: `Código IE inválido: '${codigoIE}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Código IE inválido: '${codigoIE}'\r\n` });
         return;
     }
 
@@ -293,13 +293,13 @@ const validaCodigoIE = async (codigoIE, rowCount) => {
 
     const impuestoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!impuestoResult || impuestoResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró impuesto vigente para Código IE ${codigoIE}\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró impuesto vigente para Código IE ${codigoIE}\r\n` });
     }
 }
 
-const validaFechaProceso = async (empresa, fechaProceso, rowCount) => {
+const validaFechaProceso = async (empresa, fechaProceso, rowCount, fieldName) => {
     if (!fechaProceso || isNaN(Date.parse(fechaProceso))) {
-        errores.push({ row: rowCount, message: `Fecha de proceso inválida: '${fechaProceso}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Fecha de proceso inválida: '${fechaProceso}'\r\n` });
         return;
     }
     fechaProceso = excelDateToString(fechaProceso);
@@ -310,7 +310,7 @@ const validaFechaProceso = async (empresa, fechaProceso, rowCount) => {
                    AND pEmpid = ${empresa}`;
     const periodo = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!periodo || periodo.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró un período válido para la fecha de proceso '${fechaProceso}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró un período válido para la fecha de proceso '${fechaProceso}'\r\n` });
         return;
     }
     const perid = periodo[0].Perid;
@@ -333,7 +333,7 @@ const validaFechaProceso = async (empresa, fechaProceso, rowCount) => {
         AND PERID = ${perid}`;
     const correlativos = await sequelizeFin700.query(sql2, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!correlativos || correlativos.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontraron correlativos válidos para la empresa '${empresa}' y el período '${perid}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontraron correlativos válidos para la empresa '${empresa}' y el período '${perid}'\r\n` });
     }
 
 }
