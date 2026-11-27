@@ -54,12 +54,25 @@ router.get("/listVisadores", cors(), async function (req, res) {
     try {
         sql = `select * from rpaVisadores`
         const visadores = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
-        res.status(200).send({ data: visadores });
+        res.status(200).send(visadores);
     } catch (error) {
         res.status(500).send({ error: error.message, ok: false });
     }
 }
 );
+
+router.get("/combustibles/planilla", cors(), async function (req, res) {
+    showLog(req, res);
+    try {
+        sql = `select top 3000 * from rpaCombustibles order by id desc`
+        const combustibles = await sequelize.query(sql, { type: sequelize.QueryTypes.SELECT });
+        res.status(200).send(combustibles);
+    } catch (error) {
+        res.status(500).send({ error: error.message, ok: false });
+    }
+}
+);
+
 
 router.get("/historial", cors(), async function (req, res) {
     showLog(req, res);
