@@ -199,7 +199,7 @@ const validaEmpresa = async (empresa, rowCount, fieldName) => {
         errores.push({ row: rowCount, field: fieldName, message: `Empresa inválida: '${empresa}'\r\n` });
         return;
     }
-    sql = `SELECT empId 
+    const sql = `SELECT empId 
             FROM GlbT_Empresas 
             WHERE empid = ${empresa}`;
 
@@ -236,7 +236,7 @@ const validaCentroConsumo = async (centroConsumo, rowCount, fieldName) => {
         return;
     }
 
-    sql = `SELECT CConsumoCod,
+    const sql = `SELECT CConsumoCod,
                   CConsumoDes
             FROM ExiT_CentroConsumo
             WHERE CConsumoCod = '${centroConsumo}'`;
@@ -269,7 +269,7 @@ const validaRutProveedor = async (rutProveedor, rowCount, fieldName) => {
     rutProveedor = `${parteNumero}-${digitoVerificador}`;
 
 
-    sql = `SELECT EntId 
+    const sql = `SELECT EntId 
             FROM GlbT_Entidad
             WHERE EntRut = '${rutProveedor}'`;
 
@@ -286,7 +286,7 @@ const validaCodigoIE = async (codigoIE, rowCount, fieldName) => {
         return;
     }
 
-    sql = `SELECT ImpuestoPorc 
+    const sql = `SELECT ImpuestoPorc 
             FROM LogT_Impuestos 
             WHERE ImpuestoId = ${codigoIE}
               AND FechaVigencia >= getdate()`;
@@ -338,15 +338,15 @@ const validaFechaProceso = async (empresa, fechaProceso, rowCount, fieldName) =>
 
 }
 
-const validaNroSolicitud = async (nSolicitudIdForms, rowCount) => {
+const validaNroSolicitud = async (nSolicitudIdForms, rowCount, fieldName) => {
     if (!nSolicitudIdForms || nSolicitudIdForms.toString().trim() === '') {
-        errores.push({ row: rowCount, message: `Número de solicitud inválido: '${nSolicitudIdForms}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Número de solicitud inválido: '${nSolicitudIdForms}'\r\n` });
     }
 }
 
-const validaNumeroProyecto = async (tipoProyecto, numeroProyecto, rowCount) => {
+const validaNumeroProyecto = async (tipoProyecto, numeroProyecto, rowCount, fieldName) => {
     if (!numeroProyecto || isNaN(numeroProyecto) || numeroProyecto <= 0) {
-        errores.push({ row: rowCount, message: `Número de proyecto inválido: '${numeroProyecto}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Número de proyecto inválido: '${numeroProyecto}'\r\n` });
         return;
     }
 
@@ -358,13 +358,13 @@ const validaNumeroProyecto = async (tipoProyecto, numeroProyecto, rowCount) => {
 
     const numeroProyectoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!numeroProyectoResult || numeroProyectoResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró el número de proyecto '${numeroProyecto}' para el tipo de proyecto '${tipoProyecto}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró el número de proyecto '${numeroProyecto}' para el tipo de proyecto '${tipoProyecto}'\r\n` });
     }
 }
 
-const validaTipoDocumento = async (tipoDocumento, rowCount) => {
+const validaTipoDocumento = async (tipoDocumento, rowCount, fieldName) => {
     if (!tipoDocumento || isNaN(tipoDocumento) || tipoDocumento <= 0) {
-        errores.push({ row: rowCount, message: `Tipo de documento inválido: '${tipoDocumento}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Tipo de documento inválido: '${tipoDocumento}'\r\n` });
         return;
     }
 
@@ -374,13 +374,13 @@ const validaTipoDocumento = async (tipoDocumento, rowCount) => {
 
     const tipoDocumentoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!tipoDocumentoResult || tipoDocumentoResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró el tipo de documento '${tipoDocumento}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró el tipo de documento '${tipoDocumento}'\r\n` });
     }
 }
 
-const validaProducto = async (codigo, rowCount) => {
+const validaProducto = async (codigo, rowCount, fieldName) => {
     if (!codigo || codigo.toString().trim() === '') {
-        errores.push({ row: rowCount, message: `Código de producto inválido: '${codigo}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `Código de producto inválido: '${codigo}'\r\n` });
         return;
     }
 
@@ -389,7 +389,7 @@ const validaProducto = async (codigo, rowCount) => {
 
     const productoResult = await sequelizeFin700.query(sql, { type: sequelizeFin700.QueryTypes.SELECT });
     if (!productoResult || productoResult.length === 0) {
-        errores.push({ row: rowCount, message: `No se encontró el producto con código '${codigo}'\r\n` });
+        errores.push({ row: rowCount, field: fieldName, message: `No se encontró el producto con código '${codigo}'\r\n` });
     }
 }
 
@@ -461,82 +461,81 @@ function excelDateToString(serial) {
 
 async function validaEncabezados(row) {
     let errores = [];
-    if (!row['Fecha ingreso'] && row['Fecha ingreso'].trim() != "") {
+    if (!Object.hasOwn(row, 'Fecha ingreso')) {
         errores.push("Falta el encabezado Fecha ingreso");
     }
-    if (!row['Factura'] && row['Factura'].trim() != "") {
+    if (!Object.hasOwn(row, 'Factura')) {
         errores.push("Falta el encabezado Factura");
     }
-    if (!row['GD'] && row['GD'].trim() != "") {
+    if (!Object.hasOwn(row, 'GD')) {
         errores.push("Falta el encabezado GD");
     }
-    if (!row['Empresa'] && row['Empresa'].trim() != "") {
+    if (!Object.hasOwn(row, 'Empresa')) {
         errores.push("Falta el encabezado Empresa");
     }
-    if (!row['N° Empresa'] && row['N° Empresa'].trim() != "") {
+    if (!Object.hasOwn(row, 'N° Empresa')) {
         errores.push("Falta el encabezado N° Empresa");
     }
-    if (!row['Fecha proceso'] && row['Fecha proceso'].trim() != "") {
+    if (!Object.hasOwn(row, 'Fecha proceso')) {
         errores.push("Falta el encabezado Fecha proceso");
     }
-    if (!row['Centro consumo'] && row['Centro consumo'].trim() != "") {
+    if (!Object.hasOwn(row, 'Centro consumo')) {
         errores.push("Falta el encabezado Centro consumo");
     }
-    if (!row['RUT proveedor'] && row['RUT proveedor'].trim() != "") {
+    if (!Object.hasOwn(row, 'RUT proveedor')) {
         errores.push("Falta el encabezado RUT proveedor");
     }
-    if (!row['Contacto'] && row['Contacto'].trim() != "") {
+    if (!Object.hasOwn(row, 'Contacto')) {
         errores.push("Falta el encabezado Contacto");
     }
-    if (!row['Glosa'] && row['Glosa'].trim() != "") {
+    if (!Object.hasOwn(row, 'Glosa')) {
         errores.push("Falta el encabezado Glosa");
     }
-    if (!row['N° solicitud (ID Forms)'] && row['N° solicitud (ID Forms)'].trim() != "") {
+    if (!Object.hasOwn(row, 'N° solicitud (ID Forms)')) {
         errores.push("Falta el encabezado N° solicitud (ID Forms)");
     }
-    if (!row['Solicitante'] && row['Solicitante'].trim() != "") {
+    if (!Object.hasOwn(row, 'Solicitante')) {
         errores.push("Falta el encabezado Solicitante");
     }
-    if (!row['Aprobador'] && row['Aprobador'].trim() != "") {
+    if (!Object.hasOwn(row, 'Aprobador')) {
         errores.push("Falta el encabezado Aprobador");
     }
-    if (!row['Forma Pago\r\n(Numero de cod)'] && row['Forma Pago\r\n(Numero de cod)'].trim() != "") {
+    if (!Object.hasOwn(row, 'Forma Pago\r\n(Numero de cod)')) {
         errores.push("Falta el encabezado Forma Pago (Numero de cod)");
     }
-    if (!row['Tipo proyecto'] && row['Tipo proyecto'].trim() != "") {
+    if (!Object.hasOwn(row, 'Tipo proyecto')) {
         errores.push("Falta el encabezado Tipo proyecto");
     }
-    if (!row['N° proyecto'] && row['N° proyecto'].trim() != "") {
+    if (!Object.hasOwn(row, 'N° proyecto')) {
         errores.push("Falta el encabezado N° proyecto");
     }
-    if (!row['Tipo documento'] && row['Tipo documento'].trim() != "") {
+    if (!Object.hasOwn(row, 'Tipo documento')) {
         errores.push("Falta el encabezado Tipo documento");
     }
-    if (!row['Número documento'] && row['Número documento'].trim() != "") {
+    if (!Object.hasOwn(row, 'Número documento')) {
         errores.push("Falta el encabezado Número documento");
     }
-    if (!row['Código producto'] && row['Código producto'].trim() != "") {
+    if (!Object.hasOwn(row, 'Código producto')) {
         errores.push("Falta el encabezado Código producto");
     }
-    if (!row['Cantidad Comprar'] && row['Cantidad Comprar'].trim() != "") {
+    if (!Object.hasOwn(row, 'Cantidad Comprar')) {
         errores.push("Falta el encabezado Cantidad Comprar");
     }
-    if (!row['Bodega'] && row['Bodega'].trim() != "") {
+    if (!Object.hasOwn(row, 'Bodega')) {
         errores.push("Falta el encabezado Bodega");
     }
-    if (!row['Precio unitario neto ($/L)'] && row['Precio unitario neto ($/L)'].trim() != "") {
+    if (!Object.hasOwn(row, 'Precio unitario neto ($/L)')) {
         errores.push("Falta el encabezado Precio unitario neto ($/L)");
     }
-    if (!row['Código IE'] && row['Código IE'].trim() != "") {
+    if (!Object.hasOwn(row, 'Código IE')) {
         errores.push("Falta el encabezado Código IE");
     }
-    if (!row['% IE real'] && row['% IE real'].trim() != "") {
+    if (!Object.hasOwn(row, '% IE real')) {
         errores.push("Falta el encabezado % IE real");
     }
-    if (!row['N° OC'] && row['N° OC'].trim() != "") {
+    if (!Object.hasOwn(row, 'N° OC')) {
         errores.push("Falta el encabezado N° OC");
-    }
-    return errores.join(", ");
+    } return errores.join(", ");
 }
 
 module.exports = router;
